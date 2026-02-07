@@ -29,9 +29,9 @@ function NavigationButton({ currentView, onViewChange, onManageHabits }) {
                             <span className="text-sm text-ink">{view.label}</span>
                         </button>
                     ))}
-                    
+
                     <hr className="my-2 border-line" />
-                    
+
                     <button
                         onClick={() => {
                             onManageHabits()

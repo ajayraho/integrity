@@ -27,7 +27,7 @@ function App() {
   return (
     <div className="app min-h-screen bg-paper">
       {renderView()}
-      
+
       <NavigationButton
         currentView={currentView}
         onViewChange={setCurrentView}
