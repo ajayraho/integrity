@@ -56,11 +56,49 @@ export function saveTemplate(template) {
       templates.forEach(t => t.isDefault = false)
     }
     
+    // Add unique ID
+    template.id = Date.now().toString()
     templates.push(template)
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates))
     return true
   } catch (error) {
     console.error('Error saving template:', error)
+    return false
+  }
+}
+
+// Update an existing template
+export function updateTemplate(templateId, updates) {
+  try {
+    const templates = loadTemplates()
+    const index = templates.findIndex(t => t.id === templateId)
+    
+    if (index !== -1) {
+      // If setting as default, remove default from others
+      if (updates.isDefault) {
+        templates.forEach(t => t.isDefault = false)
+      }
+      
+      templates[index] = { ...templates[index], ...updates }
+      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates))
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('Error updating template:', error)
+    return false
+  }
+}
+
+// Delete a template
+export function deleteTemplate(templateId) {
+  try {
+    const templates = loadTemplates()
+    const filtered = templates.filter(t => t.id !== templateId)
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(filtered))
+    return true
+  } catch (error) {
+    console.error('Error deleting template:', error)
     return false
   }
 }

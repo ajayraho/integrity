@@ -68,6 +68,20 @@ function DaySection({ day, onUpdate, isFirst }) {
         onUpdate(day.id, lines, updatedHabits)
     }
 
+    const applyTemplate = (template) => {
+        if (template && template.lines) {
+            // Create new lines from template with unique IDs
+            const newLines = template.lines.map((templateLine, index) => ({
+                id: `${day.id}-${Date.now()}-${index}`,
+                type: templateLine.type || 'text',
+                content: templateLine.content || ''
+            }))
+
+            setLines(newLines)
+            onUpdate(day.id, newLines, day.habits)
+        }
+    }
+
     return (
         <div
             ref={sectionRef}
@@ -87,12 +101,14 @@ function DaySection({ day, onUpdate, isFirst }) {
             <DateHeader
                 date={formatDate(day.date)}
                 dayId={day.id}
+                lines={lines}
+                onApplyTemplate={applyTemplate}
             />
 
             <div className="lines-container px-4 md:px-8 lg:px-16" style={{ paddingTop: '24px' }}>
                 {lines.map((line, index) => (
                     <EditableLine
-                        key={line.id}
+                        key={`${line.id}-${line.type}`}
                         line={line}
                         dayId={day.id}
                         onUpdate={updateLine}

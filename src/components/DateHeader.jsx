@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import TemplateMenu from './TemplateMenu'
 
-function DateHeader({ date, dayId }) {
+function DateHeader({ date, dayId, lines, onApplyTemplate }) {
     const [showMenu, setShowMenu] = useState(false)
 
     return (
@@ -28,7 +28,9 @@ function DateHeader({ date, dayId }) {
                 {showMenu && (
                     <TemplateMenu
                         dayId={dayId}
+                        lines={lines}
                         onClose={() => setShowMenu(false)}
+                        onApplyTemplate={onApplyTemplate}
                     />
                 )}
             </button>

@@ -16,10 +16,14 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
     }, [autoFocus])
 
     useEffect(() => {
-        if (contentRef.current && line.content !== contentRef.current.innerText) {
-            contentRef.current.innerText = line.content
+        if (contentRef.current) {
+            // Always set the inner text to match the line content
+            // This ensures the contentEditable div shows the correct content
+            if (line.content !== contentRef.current.innerText) {
+                contentRef.current.innerText = line.content
+            }
         }
-    }, [line.content])
+    }, [line.content, line.type])
 
     useEffect(() => {
         // Check if line has a reminder

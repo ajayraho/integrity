@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import DaySection from './DaySection'
-import { loadEntries, saveEntries } from '../utils/storage'
+import { loadEntries, saveEntries, getDefaultTemplate } from '../utils/storage'
 
 function JournalView({ viewType }) {
     const [days, setDays] = useState([])
@@ -11,12 +11,32 @@ function JournalView({ viewType }) {
     const hasScrolledToToday = useRef(false)
 
     // Create a day object
-    const createDay = useCallback((date) => ({
-        id: date.toISOString().split('T')[0],
-        date: new Date(date),
-        lines: [{ id: `${date.toISOString()}-1`, content: '', type: 'text' }],
-        habits: {}
-    }), [])
+    const createDay = useCallback((date) => {
+        const dateId = date.toISOString().split('T')[0]
+
+        // Check if there's a default template
+        const defaultTemplate = getDefaultTemplate()
+
+        let lines
+        if (defaultTemplate && defaultTemplate.lines && defaultTemplate.lines.length > 0) {
+            // Use template lines with unique IDs
+            lines = defaultTemplate.lines.map((templateLine, index) => ({
+                id: `${dateId}-${Date.now()}-${index}`,
+                type: templateLine.type || 'text',
+                content: templateLine.content || ''
+            }))
+        } else {
+            // Default single empty line
+            lines = [{ id: `${date.toISOString()}-1`, content: '', type: 'text' }]
+        }
+
+        return {
+            id: dateId,
+            date: new Date(date),
+            lines: lines,
+            habits: {}
+        }
+    }, [])
 
     useEffect(() => {
         // Load saved entries to check for existing content

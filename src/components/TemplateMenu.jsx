@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { saveTemplate, loadTemplates } from '../utils/storage'
+import { saveTemplate } from '../utils/storage'
+import TemplateBrowser from './TemplateBrowser'
 
-function TemplateMenu({ dayId, onClose }) {
+function TemplateMenu({ dayId, lines, onClose, onApplyTemplate }) {
     const menuRef = useRef(null)
     const [showNameInput, setShowNameInput] = useState(false)
     const [templateName, setTemplateName] = useState('')
     const [setAsDefault, setSetAsDefault] = useState(false)
+    const [showBrowser, setShowBrowser] = useState(false)
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -20,15 +22,36 @@ function TemplateMenu({ dayId, onClose }) {
 
     const handleSaveTemplate = () => {
         if (templateName.trim()) {
+            // Save template with actual line structure (without IDs and content)
+            const templateLines = lines.map(line => ({
+                type: line.type,
+                content: line.content || '' // Keep content as placeholder/example
+            }))
+
             saveTemplate({
                 name: templateName,
                 isDefault: setAsDefault,
-                dayId: dayId,
+                lines: templateLines,
                 createdAt: new Date().toISOString()
             })
-            alert(`Template "${templateName}" saved!`)
+
+            setShowNameInput(false)
+            setTemplateName('')
+            setSetAsDefault(false)
             onClose()
         }
+    }
+
+    if (showBrowser) {
+        return (
+            <TemplateBrowser
+                onClose={() => {
+                    setShowBrowser(false)
+                    onClose()
+                }}
+                onApply={onApplyTemplate}
+            />
+        )
     }
 
     if (showNameInput) {
@@ -43,6 +66,10 @@ function TemplateMenu({ dayId, onClose }) {
                     type="text"
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveTemplate()
+                        if (e.key === 'Escape') setShowNameInput(false)
+                    }}
                     placeholder="Template name..."
                     className="w-full px-3 py-2 border border-line rounded-lg mb-3 text-sm outline-none focus:border-ink"
                     autoFocus
@@ -87,17 +114,10 @@ function TemplateMenu({ dayId, onClose }) {
                 💾 Save as Template
             </button>
             <button
-                onClick={() => {
-                    const templates = loadTemplates()
-                    if (templates.length > 0) {
-                        alert(`Saved templates:\n${templates.map(t => `- ${t.name}${t.isDefault ? ' (default)' : ''}`).join('\n')}`)
-                    } else {
-                        alert('No templates saved yet.')
-                    }
-                }}
+                onClick={() => setShowBrowser(true)}
                 className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors text-sm text-ink"
             >
-                📋 View Templates
+                📋 Browse Templates
             </button>
         </div>
     )
