@@ -1,10 +1,11 @@
 import { useState } from 'react'
 
-function NavigationButton({ currentView, onViewChange }) {
+function NavigationButton({ currentView, onViewChange, onManageHabits }) {
     const [showMenu, setShowMenu] = useState(false)
 
     const views = [
         { id: 'continuous', label: 'Continuous Scroll', icon: '📜' },
+        { id: 'habit-tracker', label: 'Habit Tracker', icon: '📊' },
         { id: 'calendar', label: 'Calendar View', icon: '📅' },
         { id: 'timeline', label: 'Timeline View', icon: '⏱️' },
         { id: 'grid', label: 'Grid View', icon: '⊞' },
@@ -13,7 +14,7 @@ function NavigationButton({ currentView, onViewChange }) {
     return (
         <div className="fixed bottom-6 right-6 z-30">
             {showMenu && (
-                <div className="absolute bottom-16 right-0 bg-white border-2 border-line shadow-lg rounded-lg py-2 mb-2 min-w-[180px]">
+                <div className="absolute bottom-16 right-0 bg-white border-2 border-line shadow-lg rounded-lg py-2 mb-2 min-w-[200px]">
                     {views.map(view => (
                         <button
                             key={view.id}
@@ -28,6 +29,19 @@ function NavigationButton({ currentView, onViewChange }) {
                             <span className="text-sm text-ink">{view.label}</span>
                         </button>
                     ))}
+                    
+                    <hr className="my-2 border-line" />
+                    
+                    <button
+                        onClick={() => {
+                            onManageHabits()
+                            setShowMenu(false)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors flex items-center gap-2"
+                    >
+                        <span className="text-lg">⚙️</span>
+                        <span className="text-sm text-ink">Manage Habits</span>
+                    </button>
                 </div>
             )}
 
