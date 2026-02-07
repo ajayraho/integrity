@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import EditableLine from './EditableLine'
 import DateHeader from './DateHeader'
+import HabitsSection from './HabitsSection'
 
 function DaySection({ day, onUpdate, isFirst }) {
     const sectionRef = useRef(null)
@@ -45,14 +46,18 @@ function DaySection({ day, onUpdate, isFirst }) {
             line.id === lineId ? { ...line, content, type } : line
         )
         setLines(newLines)
-        onUpdate(day.id, newLines)
+        onUpdate(day.id, newLines, day.habits)
     }
 
     const deleteLine = (lineId) => {
         if (lines.length === 1) return // Keep at least one line
         const newLines = lines.filter(line => line.id !== lineId)
         setLines(newLines)
-        onUpdate(day.id, newLines)
+        onUpdate(day.id, newLines, day.habits)
+    }
+
+    const handleHabitsUpdate = (updatedHabits) => {
+        onUpdate(day.id, lines, updatedHabits)
     }
 
     return (
@@ -87,6 +92,12 @@ function DaySection({ day, onUpdate, isFirst }) {
                     />
                 ))}
             </div>
+
+            <HabitsSection
+                dayId={day.id}
+                habits={day.habits || {}}
+                onUpdate={handleHabitsUpdate}
+            />
         </div>
     )
 }
