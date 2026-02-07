@@ -69,25 +69,24 @@ function HabitsSection({ dayId, habits, onUpdate }) {
     }
 
     return (
-        <div className="habits-section mt-8 pt-6 border-t-2 border-line">
-            <h3 className="text-lg font-semibold text-ink mb-4 px-4 md:px-8 lg:px-16">
-                Daily Habits
-            </h3>
-            <div className="habits-grid px-4 md:px-8 lg:px-16 space-y-3">
-                {allHabits.map(habit => (
-                    <div
-                        key={habit.id}
-                        className="habit-item flex items-center gap-3 p-2 hover:bg-line/20 rounded-lg transition-colors"
-                    >
-                        <span className="text-2xl" style={{ color: habit.color }}>
-                            {habit.icon}
-                        </span>
-                        <span className="flex-1 text-ink font-medium" style={{ fontSize: '17px' }}>
-                            {habit.name}
-                        </span>
-                        {renderHabitInput(habit)}
-                    </div>
-                ))}
+        <div className="habits-section mt-8 mb-8 px-4 md:px-8 lg:px-16">
+            <div className="border-2 border-line rounded-lg bg-white/80 p-4 shadow-sm">
+                <div className="flex items-center gap-6 flex-wrap">
+                    {allHabits.map(habit => (
+                        <div
+                            key={habit.id}
+                            className="habit-item flex items-center gap-2"
+                        >
+                            {renderHabitInput(habit)}
+                            <span className="flex items-center gap-1 text-ink font-medium whitespace-nowrap" style={{ fontSize: '17px' }}>
+                                <span className="text-xl" style={{ color: habit.color }}>
+                                    {habit.icon}
+                                </span>
+                                {habit.name}
+                            </span>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     )

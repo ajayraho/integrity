@@ -50,10 +50,18 @@ function DaySection({ day, onUpdate, isFirst }) {
     }
 
     const deleteLine = (lineId) => {
-        if (lines.length === 1) return // Keep at least one line
+        if (lines.length === 1) return null // Keep at least one line
+
+        const lineIndex = lines.findIndex(line => line.id === lineId)
         const newLines = lines.filter(line => line.id !== lineId)
         setLines(newLines)
         onUpdate(day.id, newLines, day.habits)
+
+        // Return the previous line's ID if it exists
+        if (lineIndex > 0) {
+            return lines[lineIndex - 1].id
+        }
+        return null
     }
 
     const handleHabitsUpdate = (updatedHabits) => {
@@ -63,7 +71,8 @@ function DaySection({ day, onUpdate, isFirst }) {
     return (
         <div
             ref={sectionRef}
-            className="day-section snap-start min-h-screen relative"
+            data-day-id={day.id}
+            className="day-section snap-start min-h-screen relative pb-16"
             style={{
                 backgroundImage: `repeating-linear-gradient(
           transparent,
@@ -85,9 +94,28 @@ function DaySection({ day, onUpdate, isFirst }) {
                     <EditableLine
                         key={line.id}
                         line={line}
+                        dayId={day.id}
                         onUpdate={updateLine}
                         onEnter={() => addLine(index)}
-                        onDelete={() => deleteLine(line.id)}
+                        onDelete={() => {
+                            const prevLineId = deleteLine(line.id)
+                            if (prevLineId) {
+                                // Focus the previous line at the end
+                                setTimeout(() => {
+                                    const prevLine = document.querySelector(`[data-line-id="${prevLineId}"]`)
+                                    if (prevLine) {
+                                        prevLine.focus()
+                                        // Move cursor to end
+                                        const range = document.createRange()
+                                        const selection = window.getSelection()
+                                        range.selectNodeContents(prevLine)
+                                        range.collapse(false)
+                                        selection.removeAllRanges()
+                                        selection.addRange(range)
+                                    }
+                                }, 0)
+                            }
+                        }}
                         autoFocus={isFirst && index === 0}
                     />
                 ))}

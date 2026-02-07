@@ -9,7 +9,29 @@ function HabitTrackerView() {
 
     useEffect(() => {
         setHabits(loadHabits().sort((a, b) => a.order - b.order))
-        setEntries(loadEntries().sort((a, b) => new Date(b.date) - new Date(a.date)))
+
+        // Generate the last N days from today
+        const allEntries = loadEntries()
+        const today = new Date(2026, 1, 8) // Feb 8, 2026 (month is 0-indexed)
+        const entryMap = new Map(allEntries.map(entry => [entry.id, entry]))
+
+        const daysArray = []
+        for (let i = 0; i < 90; i++) { // Generate up to 90 days
+            const date = new Date(today)
+            date.setDate(today.getDate() - i)
+            const dayId = date.toISOString().split('T')[0]
+
+            // Use existing entry or create placeholder
+            const entry = entryMap.get(dayId) || {
+                id: dayId,
+                date: date,
+                lines: [],
+                habits: {}
+            }
+            daysArray.push(entry)
+        }
+
+        setEntries(daysArray)
     }, [])
 
     const formatDate = (date) => {

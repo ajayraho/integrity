@@ -1,9 +1,13 @@
 import { useRef, useEffect, useState } from 'react'
 import LineTypeMenu from './LineTypeMenu'
+import ReminderModal from './ReminderModal'
+import { getRemindersForLine } from '../utils/storage'
 
-function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus }) {
+function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
     const contentRef = useRef(null)
     const [showTypeMenu, setShowTypeMenu] = useState(false)
+    const [showReminderModal, setShowReminderModal] = useState(false)
+    const [hasReminder, setHasReminder] = useState(false)
 
     useEffect(() => {
         if (autoFocus && contentRef.current) {
@@ -17,6 +21,17 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus }) {
         }
     }, [line.content])
 
+    useEffect(() => {
+        // Check if line has a reminder
+        const reminders = getRemindersForLine(line.id)
+        setHasReminder(reminders.length > 0)
+    }, [line.id])
+
+    const checkForReminder = () => {
+        const reminders = getRemindersForLine(line.id)
+        setHasReminder(reminders.length > 0)
+    }
+
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
@@ -26,9 +41,16 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus }) {
                 const newLine = document.querySelector(`[data-line-id="${newLineId}"]`)
                 if (newLine) newLine.focus()
             }, 0)
-        } else if (e.key === 'Backspace' && contentRef.current.innerText === '') {
-            e.preventDefault()
-            onDelete()
+        } else if (e.key === 'Backspace') {
+            // Get the current text content
+            const text = contentRef.current?.innerText || contentRef.current?.textContent || ''
+            const trimmedText = text.trim()
+
+            // Only delete if the line is completely empty
+            if (trimmedText === '') {
+                e.preventDefault()
+                onDelete()
+            }
         }
     }
 
@@ -171,18 +193,48 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus }) {
                 </svg>
             </button>
 
-            <div className="flex-1">
-                {renderLineContent()}
+            <div className="flex-1 flex items-start gap-2">
+                <div className="flex-1">
+                    {renderLineContent()}
+                </div>
+
+                {/* Reminder Indicator */}
+                {hasReminder && (
+                    <button
+                        onClick={() => setShowReminderModal(true)}
+                        className="flex-shrink-0 mt-1.5 text-ink/60 hover:text-ink transition-colors"
+                        title="Has reminder"
+                    >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+                        </svg>
+                    </button>
+                )}
             </div>
 
             {showTypeMenu && (
                 <LineTypeMenu
                     currentType={line.type}
+                    hasContent={line.content.trim() !== ''}
                     onSelect={(type) => {
                         onUpdate(line.id, line.content, type)
                         setShowTypeMenu(false)
                     }}
+                    onSetReminder={() => {
+                        setShowReminderModal(true)
+                        setShowTypeMenu(false)
+                    }}
                     onClose={() => setShowTypeMenu(false)}
+                />
+            )}
+
+            {showReminderModal && (
+                <ReminderModal
+                    lineId={line.id}
+                    dayId={dayId}
+                    lineContent={line.content}
+                    onClose={() => setShowReminderModal(false)}
+                    onSave={checkForReminder}
                 />
             )}
         </div>

@@ -8,6 +8,7 @@ function JournalView({ viewType }) {
     const bottomSentinelRef = useRef(null)
     const containerRef = useRef(null)
     const loadingRef = useRef({ top: false, bottom: false })
+    const hasScrolledToToday = useRef(false)
 
     // Create a day object
     const createDay = useCallback((date) => ({
@@ -18,23 +19,21 @@ function JournalView({ viewType }) {
     }), [])
 
     useEffect(() => {
-        // Load entries from storage
+        // Load saved entries to check for existing content
         const savedEntries = loadEntries()
-        if (savedEntries.length > 0) {
-            // Sort by date descending (newest first)
-            const sorted = savedEntries.sort((a, b) => new Date(a.date) - new Date(b.date))
-            setDays(sorted)
-        } else {
-            // Initialize with today and a few recent days
-            const today = new Date()
-            const initialDays = []
-            for (let i = 6; i >= 0; i--) {
-                const date = new Date(today)
-                date.setDate(date.getDate() - i)
-                initialDays.push(createDay(date))
-            }
-            setDays(initialDays)
-        }
+        const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
+
+        // Start with just today
+        const today = new Date()
+        const todayId = today.toISOString().split('T')[0]
+
+        // Check if today has saved content, otherwise create new
+        const todayEntry = savedMap.get(todayId) || createDay(today)
+
+        setDays([todayEntry])
+
+        // Mark that we've already positioned at today
+        hasScrolledToToday.current = true
     }, [createDay])
 
     // Load more past days
@@ -53,13 +52,23 @@ function JournalView({ viewType }) {
             const newDays = []
             const existingIds = new Set(prevDays.map(d => d.id))
 
+            // Load saved entries to check for existing content
+            const savedEntries = loadEntries()
+            const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
+
             for (let i = 1; i <= 7; i++) {
                 const date = new Date(oldestDate)
                 date.setDate(oldestDate.getDate() - i)
                 const dayId = date.toISOString().split('T')[0]
-                
+
                 if (!existingIds.has(dayId)) {
-                    newDays.unshift(createDay(date))
+                    // Check if this day has saved content
+                    const savedDay = savedMap.get(dayId)
+                    if (savedDay) {
+                        newDays.unshift(savedDay)
+                    } else {
+                        newDays.unshift(createDay(date))
+                    }
                 }
             }
 
@@ -84,13 +93,23 @@ function JournalView({ viewType }) {
             const newDays = []
             const existingIds = new Set(prevDays.map(d => d.id))
 
+            // Load saved entries to check for existing content
+            const savedEntries = loadEntries()
+            const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
+
             for (let i = 1; i <= 7; i++) {
                 const date = new Date(newestDate)
                 date.setDate(newestDate.getDate() + i)
                 const dayId = date.toISOString().split('T')[0]
-                
+
                 if (!existingIds.has(dayId)) {
-                    newDays.push(createDay(date))
+                    // Check if this day has saved content
+                    const savedDay = savedMap.get(dayId)
+                    if (savedDay) {
+                        newDays.push(savedDay)
+                    } else {
+                        newDays.push(createDay(date))
+                    }
                 }
             }
 

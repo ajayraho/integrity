@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-function LineTypeMenu({ currentType, onSelect, onClose }) {
+function LineTypeMenu({ currentType, hasContent, onSelect, onSetReminder, onClose }) {
     const menuRef = useRef(null)
 
     useEffect(() => {
@@ -37,6 +37,22 @@ function LineTypeMenu({ currentType, onSelect, onClose }) {
                     <span className="text-sm text-ink">{option.label}</span>
                 </button>
             ))}
+
+            <hr className="my-2 border-line" />
+
+            {/* Reminder Option - only enabled if line has content */}
+            <button
+                onClick={hasContent ? onSetReminder : undefined}
+                disabled={!hasContent}
+                className={`w-full text-left px-4 py-2 transition-colors flex items-center gap-2 ${hasContent
+                        ? 'hover:bg-line/30 cursor-pointer'
+                        : 'opacity-40 cursor-not-allowed'
+                    }`}
+                title={hasContent ? 'Set a reminder for this line' : 'Write something first to set a reminder'}
+            >
+                <span className="text-lg">🔔</span>
+                <span className="text-sm text-ink">Set Reminder</span>
+            </button>
         </div>
     )
 }
