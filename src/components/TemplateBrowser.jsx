@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react'
 import { loadTemplates, deleteTemplate, updateTemplate } from '../utils/storage'
+import TemplateEditor from './TemplateEditor'
 
 function TemplateBrowser({ onClose, onApply }) {
     const [templates, setTemplates] = useState([])
     const [selectedTemplate, setSelectedTemplate] = useState(null)
     const [editingId, setEditingId] = useState(null)
     const [editName, setEditName] = useState('')
+    const [editingTemplate, setEditingTemplate] = useState(null)
 
     useEffect(() => {
         setTemplates(loadTemplates())
+
+        // Prevent background scroll when modal is open
+        document.body.style.overflow = 'hidden'
+
+        return () => {
+            // Re-enable scroll when modal closes
+            document.body.style.overflow = ''
+        }
     }, [])
 
     const handleDelete = (templateId) => {
@@ -40,6 +50,15 @@ function TemplateBrowser({ onClose, onApply }) {
         onClose()
     }
 
+    const handleEdit = (template) => {
+        setEditingTemplate(template)
+    }
+
+    const handleSaveEdit = (updatedTemplate) => {
+        setTemplates(loadTemplates())
+        setSelectedTemplate(updatedTemplate)
+    }
+
     const getLineTypeIcon = (type) => {
         switch (type) {
             case 'checkbox': return '☐'
@@ -47,6 +66,17 @@ function TemplateBrowser({ onClose, onApply }) {
             case 'checkbox-time': return '☐🕐'
             default: return '—'
         }
+    }
+
+    // If editing a template, show the editor
+    if (editingTemplate) {
+        return (
+            <TemplateEditor
+                template={editingTemplate}
+                onClose={() => setEditingTemplate(null)}
+                onSave={handleSaveEdit}
+            />
+        )
     }
 
     return (
@@ -156,10 +186,17 @@ function TemplateBrowser({ onClose, onApply }) {
                                         ✓ Apply to Current Day
                                     </button>
 
+                                    <button
+                                        onClick={() => handleEdit(selectedTemplate)}
+                                        className="px-4 py-2 border-2 border-ink text-ink rounded-lg font-medium hover:bg-ink/10 transition-colors"
+                                    >
+                                        📝 Edit Template
+                                    </button>
+
                                     {!selectedTemplate.isDefault && (
                                         <button
                                             onClick={() => handleSetDefault(selectedTemplate.id)}
-                                            className="px-4 py-2 border-2 border-ink text-ink rounded-lg font-medium hover:bg-ink/10 transition-colors"
+                                            className="px-4 py-2 border-2 border-line text-ink rounded-lg hover:bg-line/30 transition-colors"
                                         >
                                             ⭐ Set as Default
                                         </button>
