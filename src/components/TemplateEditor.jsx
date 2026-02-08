@@ -93,7 +93,10 @@ function TemplateEditor({ template, onClose, onSave }) {
     }
 
     const editorContent = (
-        <div className="fixed inset-0 bg-paper z-50 flex flex-col">
+        <div 
+            className="fixed inset-0 bg-paper z-50 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+        >
             {/* Header */}
             <div className="sticky top-0 z-10 bg-paper/95 backdrop-blur-sm border-b-2 border-line px-4 md:px-8 lg:px-16 py-3">
                 <div className="flex items-center justify-between mb-3">
@@ -176,6 +179,7 @@ function TemplateEditor({ template, onClose, onSave }) {
                         #D1E5F4 32px
                     )`,
                     backgroundPosition: '0 104px',
+                    backgroundAttachment: 'fixed',
                     paddingTop: '16px'
                 }}
             >
