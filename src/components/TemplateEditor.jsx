@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import EditableLine from './EditableLine'
 import { updateTemplate } from '../utils/storage'
 
@@ -14,10 +15,10 @@ function TemplateEditor({ template, onClose, onSave }) {
             setTemplateName(template.name || 'Untitled Template')
             setIsDefault(template.isDefault || false)
         }
-        
+
         // Prevent background scroll
         document.body.style.overflow = 'hidden'
-        
+
         return () => {
             document.body.style.overflow = ''
         }
@@ -45,10 +46,10 @@ function TemplateEditor({ template, onClose, onSave }) {
     const deleteLine = useCallback((lineId) => {
         setLines(prev => {
             if (prev.length === 1) return prev // Keep at least one line
-            
+
             const lineIndex = prev.findIndex(line => line.id === lineId)
             const newLines = prev.filter(line => line.id !== lineId)
-            
+
             // Return the previous line's ID if it exists for focus handling
             if (lineIndex > 0) {
                 setTimeout(() => {
@@ -64,7 +65,7 @@ function TemplateEditor({ template, onClose, onSave }) {
                     }
                 }, 0)
             }
-            
+
             return newLines
         })
     }, [])
@@ -91,7 +92,7 @@ function TemplateEditor({ template, onClose, onSave }) {
         onClose()
     }
 
-    return (
+    const editorContent = (
         <div className="fixed inset-0 bg-paper z-50 flex flex-col">
             {/* Header */}
             <div className="sticky top-0 z-10 bg-paper/95 backdrop-blur-sm border-b-2 border-line px-4 md:px-8 lg:px-16 py-3">
@@ -127,7 +128,7 @@ function TemplateEditor({ template, onClose, onSave }) {
                             </span>
                         )}
                     </div>
-                    
+
                     <button
                         onClick={onClose}
                         className="text-ink/60 hover:text-ink text-3xl leading-none px-3"
@@ -201,6 +202,9 @@ function TemplateEditor({ template, onClose, onSave }) {
             </div>
         </div>
     )
+
+    // Render using portal to document.body
+    return createPortal(editorContent, document.body)
 }
 
 export default TemplateEditor

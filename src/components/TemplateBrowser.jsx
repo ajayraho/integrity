@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { loadTemplates, deleteTemplate, updateTemplate } from '../utils/storage'
 import TemplateEditor from './TemplateEditor'
 
@@ -79,7 +80,7 @@ function TemplateBrowser({ onClose, onApply }) {
         )
     }
 
-    return (
+    const modalContent = (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div
                 className="bg-paper border-4 border-line rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
@@ -230,6 +231,9 @@ function TemplateBrowser({ onClose, onApply }) {
             </div>
         </div>
     )
+
+    // Render using portal to document.body
+    return createPortal(modalContent, document.body)
 }
 
 export default TemplateBrowser
