@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadHabits } from '../utils/storage'
+import { loadHabits, saveHabits } from '../utils/storage'
 import ConfirmDialog from './ConfirmDialog'
+import HabitReorderModal from './HabitReorderModal'
 
 function HabitsSection({ dayId, habits, onUpdate }) {
     const [allHabits, setAllHabits] = useState([])
     const [dayHabits, setDayHabits] = useState(habits || {})
     const [showMenu, setShowMenu] = useState(false)
+    const [showReorderModal, setShowReorderModal] = useState(false)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
     const menuRef = useRef(null)
 
@@ -25,12 +27,23 @@ function HabitsSection({ dayId, habits, onUpdate }) {
     useEffect(() => {
         // Load all defined habits
         const loaded = loadHabits()
-        setAllHabits(loaded.sort((a, b) => a.order - b.order))
+        setAllHabits(loaded.sort((a, b) => (a.order || 0) - (b.order || 0)))
     }, [])
 
     useEffect(() => {
         setDayHabits(habits || {})
     }, [habits])
+
+    const handleSaveReorder = (reorderedHabits) => {
+        // Update habits with new order and visibility
+        const updatedHabits = reorderedHabits.map((habit, index) => ({
+            ...habit,
+            order: index,
+            visible: habit.visible
+        }))
+        saveHabits(updatedHabits)
+        setAllHabits(updatedHabits)
+    }
 
     const handleHabitChange = (habitId, value) => {
         let updated
@@ -113,6 +126,15 @@ function HabitsSection({ dayId, habits, onUpdate }) {
                     <div className="absolute top-10 right-2 bg-white border-2 border-line shadow-lg rounded-lg py-2 z-20 min-w-[180px]">
                         <button
                             onClick={() => {
+                                setShowReorderModal(true)
+                                setShowMenu(false)
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors text-sm text-ink"
+                        >
+                            ⚡ Reorder Habits
+                        </button>
+                        <button
+                            onClick={() => {
                                 setConfirmDialog({
                                     isOpen: true,
                                     action: () => {
@@ -143,7 +165,7 @@ function HabitsSection({ dayId, habits, onUpdate }) {
                 )}
 
                 <div className="flex items-center gap-6 flex-wrap">
-                    {allHabits.map(habit => (
+                    {allHabits.filter(h => h.visible !== false).map(habit => (
                         <div
                             key={habit.id}
                             className="habit-item flex items-center gap-2"
@@ -167,6 +189,14 @@ function HabitsSection({ dayId, habits, onUpdate }) {
                 onConfirm={confirmDialog.action}
                 onCancel={() => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })}
             />
+
+            {showReorderModal && (
+                <HabitReorderModal
+                    habits={allHabits}
+                    onClose={() => setShowReorderModal(false)}
+                    onSave={handleSaveReorder}
+                />
+            )}
         </div>
     )
 }

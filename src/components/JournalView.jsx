@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import DaySection from './DaySection'
+import JumpToTodayButton from './JumpToTodayButton'
 import { loadEntries, saveEntries, getDefaultTemplate } from '../utils/storage'
 
 function JournalView({ viewType }) {
     const [days, setDays] = useState([])
+    const [showJumpButton, setShowJumpButton] = useState(false)
     const topSentinelRef = useRef(null)
     const bottomSentinelRef = useRef(null)
     const containerRef = useRef(null)
     const loadingRef = useRef({ top: false, bottom: false })
     const hasScrolledToToday = useRef(false)
+    const todayRef = useRef(null)
 
     // Create a day object
     const createDay = useCallback((date) => {
@@ -195,6 +198,29 @@ function JournalView({ viewType }) {
         }
     }, [days])
 
+    // Detect if today is visible in viewport
+    useEffect(() => {
+        if (!containerRef.current || !todayRef.current) return
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                // Show button when today is NOT in viewport
+                setShowJumpButton(!entry.isIntersecting)
+            },
+            { threshold: 0.1, root: containerRef.current }
+        )
+
+        observer.observe(todayRef.current)
+
+        return () => observer.disconnect()
+    }, [days])
+
+    const jumpToToday = () => {
+        if (todayRef.current) {
+            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+    }
+
     const updateDay = (dayId, updatedLines, habits) => {
         setDays(prevDays =>
             prevDays.map(day =>
@@ -212,25 +238,38 @@ function JournalView({ viewType }) {
     }
 
     return (
-        <div
-            ref={containerRef}
-            className="journal-view scroll-smooth snap-y snap-mandatory h-screen overflow-y-scroll"
-        >
-            {/* Top sentinel for loading past days */}
-            <div ref={topSentinelRef} className="h-4" />
+        <>
+            <div
+                ref={containerRef}
+                className="journal-view scroll-smooth snap-y snap-mandatory h-screen overflow-y-scroll"
+            >
+                {/* Top sentinel for loading past days */}
+                <div ref={topSentinelRef} className="h-4" />
 
-            {days.map((day, index) => (
-                <DaySection
-                    key={day.id}
-                    day={day}
-                    onUpdate={updateDay}
-                    isFirst={index === 0}
-                />
-            ))}
+                {days.map((day, index) => {
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    const dayDate = new Date(day.date)
+                    dayDate.setHours(0, 0, 0, 0)
+                    const isToday = dayDate.getTime() === today.getTime()
 
-            {/* Bottom sentinel for loading future days */}
-            <div ref={bottomSentinelRef} className="h-4" />
-        </div>
+                    return (
+                        <div key={day.id} ref={isToday ? todayRef : null}>
+                            <DaySection
+                                day={day}
+                                onUpdate={updateDay}
+                                isFirst={index === 0}
+                            />
+                        </div>
+                    )
+                })}
+
+                {/* Bottom sentinel for loading future days */}
+                <div ref={bottomSentinelRef} className="h-4" />
+            </div>
+
+            <JumpToTodayButton onJumpToToday={jumpToToday} isVisible={showJumpButton} />
+        </>
     )
 }
 
