@@ -7,6 +7,7 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
 
     const views = [
         { id: 'continuous', label: 'Continuous Scroll', icon: '📜' },
+        { id: 'xp-stats', label: 'XP Statistics', icon: '🏆' },
         { id: 'habit-tracker', label: 'Habit Tracker', icon: '📊' },
         { id: 'calendar', label: 'Calendar View', icon: '📅' },
         { id: 'timeline', label: 'Timeline View', icon: '⏱️' },

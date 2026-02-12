@@ -5,7 +5,8 @@ let dataCache = {
   entries: [],
   habits: [],
   templates: [],
-  reminders: []
+  reminders: [],
+  xpHistory: [] // Array of {date, amount, source, timestamp, lineId/habitId}
 }
 
 let isInitialized = false
@@ -307,5 +308,134 @@ export function saveSettings(settings) {
   } catch (error) {
     console.error('Error saving settings:', error)
     return false
+  }
+}
+
+// ============= XP SYSTEM =============
+
+/**
+ * Add XP to history
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @param {number} amount - XP amount (positive or negative)
+ * @param {string} source - 'habit' or 'task'
+ * @param {string} sourceId - habitId or lineId
+ * @param {string} sourceName - Name of the habit or task
+ */
+export function addXP(date, amount, source, sourceId, sourceName = '') {
+  try {
+    if (!dataCache.xpHistory) {
+      dataCache.xpHistory = []
+    }
+    
+    const xpEntry = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      date,
+      amount,
+      source,
+      sourceId,
+      sourceName,
+      timestamp: new Date().toISOString()
+    }
+    
+    dataCache.xpHistory.push(xpEntry)
+    scheduleSave()
+    return xpEntry
+  } catch (error) {
+    console.error('Error adding XP:', error)
+    return null
+  }
+}
+
+/**
+ * Get total XP for a specific date
+ */
+export function getXPForDate(date) {
+  try {
+    if (!dataCache.xpHistory) return 0
+    return dataCache.xpHistory
+      .filter(xp => xp.date === date)
+      .reduce((sum, xp) => sum + xp.amount, 0)
+  } catch (error) {
+    console.error('Error getting XP for date:', error)
+    return 0
+  }
+}
+
+/**
+ * Get total XP for all time
+ */
+export function getTotalXP() {
+  try {
+    if (!dataCache.xpHistory) return 0
+    return dataCache.xpHistory.reduce((sum, xp) => sum + xp.amount, 0)
+  } catch (error) {
+    console.error('Error getting total XP:', error)
+    return 0
+  }
+}
+
+/**
+ * Get XP history for a month
+ * @param {number} year
+ * @param {number} month - 1-based (1 = January)
+ */
+export function getXPForMonth(year, month) {
+  try {
+    if (!dataCache.xpHistory) return []
+    
+    const monthStr = month.toString().padStart(2, '0')
+    const prefix = `${year}-${monthStr}`
+    
+    // Group by date
+    const dailyXP = {}
+    dataCache.xpHistory
+      .filter(xp => xp.date.startsWith(prefix))
+      .forEach(xp => {
+        if (!dailyXP[xp.date]) {
+          dailyXP[xp.date] = { date: xp.date, total: 0, entries: [] }
+        }
+        dailyXP[xp.date].total += xp.amount
+        dailyXP[xp.date].entries.push(xp)
+      })
+    
+    return Object.values(dailyXP).sort((a, b) => a.date.localeCompare(b.date))
+  } catch (error) {
+    console.error('Error getting XP for month:', error)
+    return []
+  }
+}
+
+/**
+ * Remove XP entries for a specific source (when unchecking)
+ * @param {string} sourceId - habitId or lineId
+ * @param {string} date - Date in YYYY-MM-DD format
+ */
+export function removeXPForSource(sourceId, date) {
+  try {
+    if (!dataCache.xpHistory) return 0
+    
+    const removed = dataCache.xpHistory.filter(xp => xp.sourceId === sourceId && xp.date === date)
+    const totalRemoved = removed.reduce((sum, xp) => sum + xp.amount, 0)
+    
+    dataCache.xpHistory = dataCache.xpHistory.filter(xp => !(xp.sourceId === sourceId && xp.date === date))
+    scheduleSave()
+    
+    return totalRemoved
+  } catch (error) {
+    console.error('Error removing XP:', error)
+    return 0
+  }
+}
+
+/**
+ * Get XP entries for a specific source and date
+ */
+export function getXPForSource(sourceId, date) {
+  try {
+    if (!dataCache.xpHistory) return []
+    return dataCache.xpHistory.filter(xp => xp.sourceId === sourceId && xp.date === date)
+  } catch (error) {
+    console.error('Error getting XP for source:', error)
+    return []
   }
 }

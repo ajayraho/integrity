@@ -10,7 +10,9 @@ function HabitManagement({ onClose }) {
         name: '',
         type: 'checkbox',
         icon: '✓',
-        color: '#2C3E50'
+        color: '#2C3E50',
+        goal: 1,
+        xp: 10
     })
 
     useEffect(() => {
@@ -25,7 +27,7 @@ function HabitManagement({ onClose }) {
         if (!newHabit.name.trim()) return
 
         addHabit(newHabit)
-        setNewHabit({ name: '', type: 'checkbox', icon: '✓', color: '#2C3E50' })
+        setNewHabit({ name: '', type: 'checkbox', icon: '✓', color: '#2C3E50', goal: 1, xp: 10 })
         setShowAddForm(false)
         loadHabitsData()
     }
@@ -122,6 +124,38 @@ function HabitManagement({ onClose }) {
                                     </div>
                                 </div>
 
+                                {newHabit.type === 'number' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-ink mb-1">Daily Goal</label>
+                                        <input
+                                            type="number"
+                                            value={newHabit.goal}
+                                            onChange={(e) => setNewHabit({ ...newHabit, goal: parseInt(e.target.value) || 1 })}
+                                            min="1"
+                                            placeholder="e.g., 10"
+                                            className="w-full px-3 py-2 border border-line rounded-lg outline-none focus:border-ink"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">The target number you want to achieve daily</p>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-sm font-medium text-ink mb-1">XP Reward</label>
+                                    <input
+                                        type="number"
+                                        value={newHabit.xp}
+                                        onChange={(e) => setNewHabit({ ...newHabit, xp: parseInt(e.target.value) || 0 })}
+                                        min="0"
+                                        placeholder="e.g., 10"
+                                        className="w-full px-3 py-2 border border-line rounded-lg outline-none focus:border-ink"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {newHabit.type === 'checkbox'
+                                            ? 'Full XP awarded on completion'
+                                            : 'XP awarded proportionally based on progress toward goal'}
+                                    </p>
+                                </div>
+
                                 <div className="flex gap-2">
                                     <button
                                         onClick={handleAddHabit}
@@ -155,6 +189,8 @@ function HabitManagement({ onClose }) {
                                         <div className="font-semibold text-ink">{habit.name}</div>
                                         <div className="text-sm text-gray-600">
                                             Type: {typeOptions.find(t => t.value === habit.type)?.label}
+                                            {habit.type === 'number' && habit.goal && ` • Goal: ${habit.goal}`}
+                                            {habit.xp && ` • XP: ${habit.xp}`}
                                         </div>
                                     </div>
                                     <button

@@ -3,13 +3,21 @@ import EditableLine from './EditableLine'
 import DateHeader from './DateHeader'
 import HabitsSection from './HabitsSection'
 
-function DaySection({ day, onUpdate, isFirst }) {
+function DaySection({ day, onUpdate, isFirst, showXPGain, showXPLoss }) {
     const sectionRef = useRef(null)
     const [lines, setLines] = useState(day.lines)
 
     useEffect(() => {
         setLines(day.lines)
     }, [day.lines])
+
+    const handleXPChange = (amount, type) => {
+        if (type === 'gain') {
+            showXPGain?.(Math.abs(amount))
+        } else if (type === 'loss') {
+            showXPLoss?.(Math.abs(amount))
+        }
+    }
 
     const formatDate = (date) => {
         const d = new Date(date)
@@ -41,9 +49,9 @@ function DaySection({ day, onUpdate, isFirst }) {
         return newLine.id
     }
 
-    const updateLine = (lineId, content, type) => {
+    const updateLine = (lineId, content, type, checked, xp) => {
         const newLines = lines.map(line =>
-            line.id === lineId ? { ...line, content, type } : line
+            line.id === lineId ? { ...line, content, type, checked, xp } : line
         )
         setLines(newLines)
         onUpdate(day.id, newLines, day.habits)
@@ -145,6 +153,7 @@ function DaySection({ day, onUpdate, isFirst }) {
                             }
                         }}
                         autoFocus={isFirst && index === 0}
+                        onXPChange={handleXPChange}
                     />
                 ))}
             </div>
@@ -153,6 +162,7 @@ function DaySection({ day, onUpdate, isFirst }) {
                 dayId={day.id}
                 habits={day.habits || {}}
                 onUpdate={handleHabitsUpdate}
+                onXPChange={handleXPChange}
             />
         </div>
     )

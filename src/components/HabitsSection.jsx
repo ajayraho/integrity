@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadHabits, saveHabits } from '../utils/storage'
+import { loadHabits, saveHabits, addXP, removeXPForSource, getXPForSource } from '../utils/storage'
 import ConfirmDialog from './ConfirmDialog'
 import HabitReorderModal from './HabitReorderModal'
 
-function HabitsSection({ dayId, habits, onUpdate }) {
+function HabitsSection({ dayId, habits, onUpdate, onXPChange }) {
     const [allHabits, setAllHabits] = useState([])
     const [dayHabits, setDayHabits] = useState(habits || {})
     const [showMenu, setShowMenu] = useState(false)
@@ -51,11 +51,65 @@ function HabitsSection({ dayId, habits, onUpdate }) {
             // Bulk update (for reset all)
             updated = value
         } else {
-            // Single habit update
+            // Single habit update - handle XP
+            const habit = allHabits.find(h => h.id === habitId)
+            if (habit && habit.xp) {
+                const oldValue = dayHabits[habitId]
+                handleXPChange(habit, oldValue, value)
+            }
             updated = { ...dayHabits, [habitId]: value }
         }
         setDayHabits(updated)
         onUpdate(updated)
+    }
+
+    const handleXPChange = (habit, oldValue, newValue) => {
+        const dateStr = dayId // Assuming dayId is in YYYY-MM-DD format
+
+        if (habit.type === 'checkbox') {
+            // Boolean habit: full XP on check, remove XP on uncheck
+            const wasChecked = oldValue === true || oldValue === 'true'
+            const isChecked = newValue === true || newValue === 'true'
+
+            if (isChecked && !wasChecked) {
+                // Gained XP
+                addXP(dateStr, habit.xp, 'habit', habit.id, habit.name)
+                onXPChange?.(habit.xp, 'gain')
+            } else if (!isChecked && wasChecked) {
+                // Lost XP
+                const removedXP = removeXPForSource(habit.id, dateStr)
+                if (removedXP > 0) {
+                    onXPChange?.(-removedXP, 'loss')
+                }
+            }
+        } else if (habit.type === 'number' && habit.goal) {
+            // Number habit: proportional XP based on goal
+            const oldNum = parseFloat(oldValue) || 0
+            const newNum = parseFloat(newValue) || 0
+
+            // Calculate XP based on progress toward goal
+            const oldXP = Math.min((oldNum / habit.goal) * habit.xp, habit.xp)
+            const newXP = Math.min((newNum / habit.goal) * habit.xp, habit.xp)
+
+            const xpDiff = Math.round(newXP - oldXP)
+
+            if (xpDiff !== 0) {
+                // Remove old XP entries for this habit today
+                removeXPForSource(habit.id, dateStr)
+
+                // Add new XP if any
+                if (newXP > 0) {
+                    addXP(dateStr, Math.round(newXP), 'habit', habit.id, habit.name)
+                }
+
+                // Notify parent
+                if (xpDiff > 0) {
+                    onXPChange?.(xpDiff, 'gain')
+                } else if (xpDiff < 0) {
+                    onXPChange?.(xpDiff, 'loss')
+                }
+            }
+        }
     }
 
     const renderHabitInput = (habit) => {

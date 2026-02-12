@@ -4,9 +4,12 @@ import HabitTrackerView from './components/HabitTrackerView'
 import CalendarView from './components/CalendarView'
 import TimelineView from './components/TimelineView'
 import GridView from './components/GridView'
+import XPStatsView from './components/XPStatsView'
 import HabitManagement from './components/HabitManagement'
 import NavigationButton from './components/NavigationButton'
 import Login from './components/Login'
+import Toast from './components/Toast'
+import { useToast } from './hooks/useToast'
 import { initializeNotifications } from './utils/notifications'
 import { initSession, clearSession } from './utils/database'
 import { initializeStorage } from './utils/storage'
@@ -18,6 +21,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const { toasts, showXPGain, showXPLoss, removeToast } = useToast()
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -105,8 +109,10 @@ function App() {
     switch (currentView) {
       case 'habit-tracker':
         return <HabitTrackerView />
+      case 'xp-stats':
+        return <XPStatsView />
       case 'continuous':
-        return <JournalView viewType={currentView} />
+        return <JournalView viewType={currentView} showXPGain={showXPGain} showXPLoss={showXPLoss} />
       case 'calendar':
         return <CalendarView />
       case 'timeline':
@@ -136,6 +142,18 @@ function App() {
       {showHabitManagement && (
         <HabitManagement onClose={() => setShowHabitManagement(false)} />
       )}
+
+      {/* Toast notifications */}
+      {toasts.map((toast, index) => (
+        <div key={toast.id} style={{ position: 'fixed', top: `${24 + index * 80}px`, left: '50%', transform: 'translateX(-50%)', zIndex: 200 }}>
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            duration={toast.duration || 3000}
+            onClose={() => removeToast(toast.id)}
+          />
+        </div>
+      ))}
     </div>
   )
 }

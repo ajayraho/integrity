@@ -1,13 +1,17 @@
 import { useRef, useEffect, useState } from 'react'
 import LineTypeMenu from './LineTypeMenu'
 import ReminderModal from './ReminderModal'
-import { getRemindersForLine } from '../utils/storage'
+import XPPromptModal from './XPPromptModal'
+import { getRemindersForLine, addXP, removeXPForSource, getXPForSource } from '../utils/storage'
 
-function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
+function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onXPChange }) {
     const contentRef = useRef(null)
     const [showTypeMenu, setShowTypeMenu] = useState(false)
     const [showReminderModal, setShowReminderModal] = useState(false)
+    const [showXPPrompt, setShowXPPrompt] = useState(false)
     const [hasReminder, setHasReminder] = useState(false)
+    const [isChecked, setIsChecked] = useState(line.checked || false)
+    const [lineXP, setLineXP] = useState(line.xp || 0)
 
     useEffect(() => {
         if (autoFocus && contentRef.current) {
@@ -31,9 +35,44 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
         setHasReminder(reminders.length > 0)
     }, [line.id])
 
+    useEffect(() => {
+        setIsChecked(line.checked || false)
+        setLineXP(line.xp || 0)
+    }, [line.checked, line.xp])
+
     const checkForReminder = () => {
         const reminders = getRemindersForLine(line.id)
         setHasReminder(reminders.length > 0)
+    }
+
+    const handleCheckboxChange = (checked) => {
+        if ((line.type === 'checkbox' || line.type === 'checkbox-time') && checked && !isChecked) {
+            // Checking a box - prompt for XP
+            setShowXPPrompt(true)
+        } else if (!checked && isChecked) {
+            // Unchecking - deduct XP
+            const removedXP = removeXPForSource(line.id, dayId)
+            if (removedXP > 0) {
+                onXPChange?.(-removedXP, 'loss')
+            }
+            setIsChecked(false)
+            setLineXP(0)
+            onUpdate(line.id, contentRef.current.innerText, line.type, false, 0)
+        }
+    }
+
+    const handleXPConfirm = (xp) => {
+        setShowXPPrompt(false)
+        setIsChecked(true)
+        setLineXP(xp)
+
+        // Add XP to history
+        const taskName = contentRef.current.innerText.trim() || 'Task'
+        addXP(dayId, xp, 'task', line.id, taskName)
+        onXPChange?.(xp, 'gain')
+
+        // Update line with checked and XP data
+        onUpdate(line.id, contentRef.current.innerText, line.type, true, xp)
     }
 
     const handleKeyDown = (e) => {
@@ -122,10 +161,9 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                     <div className="flex items-start gap-2">
                         <input
                             type="checkbox"
+                            checked={isChecked}
                             className="mt-1.5 w-4 h-4 cursor-pointer"
-                            onChange={(e) => {
-                                onUpdate(line.id, contentRef.current.innerText, line.type, e.target.checked)
-                            }}
+                            onChange={(e) => handleCheckboxChange(e.target.checked)}
                         />
                         <div
                             ref={contentRef}
@@ -143,6 +181,11 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                             }}
                             placeholder="Write something..."
                         />
+                        {lineXP > 0 && (
+                            <span className="mt-1.5 text-sm text-green-600 font-semibold">
+                                +{lineXP} XP
+                            </span>
+                        )}
                     </div>
                 )
 
@@ -151,7 +194,9 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                     <div className="flex items-start gap-2">
                         <input
                             type="checkbox"
+                            checked={isChecked}
                             className="mt-1.5 w-4 h-4 cursor-pointer flex-shrink-0"
+                            onChange={(e) => handleCheckboxChange(e.target.checked)}
                         />
                         <input
                             type="time"
@@ -180,6 +225,11 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                             }}
                             placeholder="Task..."
                         />
+                        {lineXP > 0 && (
+                            <span className="mt-1.5 text-sm text-green-600 font-semibold flex-shrink-0">
+                                +{lineXP} XP
+                            </span>
+                        )}
                     </div>
                 )
 
@@ -294,6 +344,15 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                     onSave={checkForReminder}
                 />
             )}
+
+            <XPPromptModal
+                isOpen={showXPPrompt}
+                onConfirm={handleXPConfirm}
+                onCancel={() => {
+                    setShowXPPrompt(false)
+                }}
+                defaultValue={10}
+            />
         </div>
     )
 }
