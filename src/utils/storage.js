@@ -459,12 +459,12 @@ export const BADGE_TYPES = {
 }
 
 export const MEDAL_TIERS = {
-  BRONZE: { id: 'bronze', name: 'Bronze Medal', icon: '🥉', threshold: 100, color: '#CD7F32' },
-  SILVER: { id: 'silver', name: 'Silver Medal', icon: '🥈', threshold: 500, color: '#C0C0C0' },
-  GOLD: { id: 'gold', name: 'Gold Medal', icon: '🥇', threshold: 1000, color: '#FFD700' },
-  PLATINUM: { id: 'platinum', name: 'Platinum Medal', icon: '💎', threshold: 2500, color: '#E5E4E2' },
-  DIAMOND: { id: 'diamond', name: 'Diamond Medal', icon: '💠', threshold: 5000, color: '#B9F2FF' },
-  LEGEND: { id: 'legend', name: 'Legend Medal', icon: '👑', threshold: 10000, color: '#9D00FF' }
+  BRONZE: { id: 'bronze', name: 'Bronze Medal', icon: '🥉', threshold: 100, color: '#CD7F32', description: 'Earn 100+ XP in a month' },
+  SILVER: { id: 'silver', name: 'Silver Medal', icon: '🥈', threshold: 500, color: '#C0C0C0', description: 'Earn 500+ XP in a month' },
+  GOLD: { id: 'gold', name: 'Gold Medal', icon: '🥇', threshold: 1000, color: '#FFD700', description: 'Earn 1000+ XP in a month' },
+  PLATINUM: { id: 'platinum', name: 'Platinum Medal', icon: '💎', threshold: 2500, color: '#E5E4E2', description: 'Earn 2500+ XP in a month' },
+  DIAMOND: { id: 'diamond', name: 'Diamond Medal', icon: '💠', threshold: 5000, color: '#B9F2FF', description: 'Earn 5000+ XP in a month' },
+  LEGEND: { id: 'legend', name: 'Legend Medal', icon: '👑', threshold: 10000, color: '#9D00FF', description: 'Earn 10000+ XP in a month' }
 }
 
 /**
@@ -494,6 +494,7 @@ export function awardBadge(badgeType, date) {
       name: badgeInfo.name,
       icon: badgeInfo.icon,
       xpBoost: badgeInfo.xpBoost,
+      description: badgeInfo.description || '',
       date,
       timestamp: new Date().toISOString()
     }
@@ -507,6 +508,39 @@ export function awardBadge(badgeType, date) {
     return badge
   } catch (error) {
     console.error('Error awarding badge:', error)
+    return null
+  }
+}
+
+/**
+ * Create a custom badge
+ */
+export function createCustomBadge(badgeData, date) {
+  try {
+    if (!dataCache.badges) {
+      dataCache.badges = []
+    }
+
+    const badge = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      type: 'CUSTOM',
+      name: badgeData.name,
+      icon: badgeData.icon,
+      xpBoost: badgeData.xpBoost,
+      description: badgeData.description || '',
+      date,
+      timestamp: new Date().toISOString()
+    }
+
+    dataCache.badges.push(badge)
+    
+    // Award XP boost
+    addXP(date, badgeData.xpBoost, 'badge', badge.id, `Badge: ${badgeData.name}`)
+    
+    scheduleSave()
+    return badge
+  } catch (error) {
+    console.error('Error creating custom badge:', error)
     return null
   }
 }
@@ -568,7 +602,7 @@ export function deleteBadge(badgeId) {
 /**
  * Update a badge's date
  */
-export function updateBadge(badgeId, newDate) {
+export function updateBadge(badgeId, updates) {
   try {
     if (!dataCache.badges) return { success: false, error: 'No badges found' }
     
@@ -577,16 +611,19 @@ export function updateBadge(badgeId, newDate) {
       return { success: false, error: 'Badge not found' }
     }
     
-    // Remove XP from old date
-    removeXPForSource(badgeId, badge.date)
+    // If XP changed, update the XP history
+    if (updates.xpBoost !== undefined && updates.xpBoost !== badge.xpBoost) {
+      removeXPForSource(badgeId, badge.date)
+      badge.xpBoost = updates.xpBoost
+      addXP(badge.date, badge.xpBoost, 'badge', badge.id, `Badge: ${badge.name}`)
+    }
     
-    // Update badge date
-    const oldDate = badge.date
-    badge.date = newDate
+    // Update other properties
+    if (updates.icon !== undefined) badge.icon = updates.icon
+    if (updates.name !== undefined) badge.name = updates.name
+    if (updates.description !== undefined) badge.description = updates.description
+    
     badge.timestamp = new Date().toISOString()
-    
-    // Add XP to new date
-    addXP(newDate, badge.xpBoost, 'badge', badge.id, `Badge: ${badge.name}`)
     
     scheduleSave()
     
@@ -660,6 +697,7 @@ export function awardMedal(tier, year, month) {
       name: medalInfo.name,
       icon: medalInfo.icon,
       threshold: medalInfo.threshold,
+      description: medalInfo.description || '',
       year,
       month,
       timestamp: new Date().toISOString()
@@ -670,6 +708,36 @@ export function awardMedal(tier, year, month) {
     return medal
   } catch (error) {
     console.error('Error awarding medal:', error)
+    return null
+  }
+}
+
+/**
+ * Create a custom medal
+ */
+export function createCustomMedal(medalData, year, month) {
+  try {
+    if (!dataCache.medals) {
+      dataCache.medals = []
+    }
+
+    const medal = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      tier: 'CUSTOM',
+      name: medalData.name,
+      icon: medalData.icon,
+      threshold: medalData.threshold,
+      description: medalData.description || '',
+      year,
+      month,
+      timestamp: new Date().toISOString()
+    }
+
+    dataCache.medals.push(medal)
+    scheduleSave()
+    return medal
+  } catch (error) {
+    console.error('Error creating custom medal:', error)
     return null
   }
 }
@@ -738,7 +806,7 @@ export function deleteMedal(medalId) {
 /**
  * Update a medal's month/year
  */
-export function updateMedal(medalId, newYear, newMonth) {
+export function updateMedal(medalId, updates) {
   try {
     if (!dataCache.medals) return { success: false, error: 'No medals found' }
     
@@ -747,9 +815,12 @@ export function updateMedal(medalId, newYear, newMonth) {
       return { success: false, error: 'Medal not found' }
     }
     
-    // Update medal month/year
-    medal.year = newYear
-    medal.month = newMonth
+    // Update properties
+    if (updates.icon !== undefined) medal.icon = updates.icon
+    if (updates.name !== undefined) medal.name = updates.name
+    if (updates.threshold !== undefined) medal.threshold = updates.threshold
+    if (updates.description !== undefined) medal.description = updates.description
+    
     medal.timestamp = new Date().toISOString()
     
     scheduleSave()

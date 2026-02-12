@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getTotalXP, getXPForMonth, getMedalForMonth, getAllMedals, getBadgesForDate, checkMonthlyMedals, BADGE_TYPES, MEDAL_TIERS, awardBadge, awardMedal, getAllBadges, deleteBadge, updateBadge, deleteMedal, updateMedal } from '../utils/storage'
+import { getTotalXP, getXPForMonth, getMedalForMonth, getAllMedals, getBadgesForDate, checkMonthlyMedals, BADGE_TYPES, MEDAL_TIERS, awardBadge, awardMedal, getAllBadges, deleteBadge, updateBadge, deleteMedal, updateMedal, createCustomBadge, createCustomMedal } from '../utils/storage'
 import ConfirmDialog from './ConfirmDialog'
 
 // Hash-based color generation (same as DateHeader)
@@ -31,8 +31,12 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
     const [earnedBadges, setEarnedBadges] = useState([])
     const [selectedBadge, setSelectedBadge] = useState(null)
     const [selectedMedal, setSelectedMedal] = useState(null)
-    const [editingBadge, setEditingBadge] = useState({ icon: '', name: '', xp: 0, date: '' })
-    const [editingMedal, setEditingMedal] = useState({ icon: '', name: '', threshold: 0, year: 0, month: 0 })
+    const [editingBadge, setEditingBadge] = useState({ icon: '', name: '', xp: 0, description: '' })
+    const [editingMedal, setEditingMedal] = useState({ icon: '', name: '', threshold: 0, description: '', year: 0, month: 0 })
+    const [showCreateBadge, setShowCreateBadge] = useState(false)
+    const [showCreateMedal, setShowCreateMedal] = useState(false)
+    const [newBadge, setNewBadge] = useState({ icon: '', name: '', xp: 0, description: '' })
+    const [newMedal, setNewMedal] = useState({ icon: '', name: '', threshold: 0, description: '' })
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
     useEffect(() => {
@@ -193,7 +197,7 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             icon: badge.icon,
             name: badge.name,
             xp: badge.xpBoost,
-            date: badge.date
+            description: badge.description || ''
         })
     }
 
@@ -204,6 +208,7 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             icon: medal.icon,
             name: medal.name,
             threshold: medal.threshold,
+            description: medal.description || '',
             year: medal.year,
             month: medal.month
         })
@@ -266,13 +271,14 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
         const result = updateBadge(selectedBadge.id, {
             icon: editingBadge.icon,
             name: editingBadge.name,
-            xpBoost: editingBadge.xp
+            xpBoost: editingBadge.xp,
+            description: editingBadge.description
         })
 
         if (result.success) {
             loadData()
             setSelectedBadge(null)
-            setEditingBadge({ icon: '', name: '', xp: 0, date: '' })
+            setEditingBadge({ icon: '', name: '', xp: 0, description: '' })
             if (showXPGain) {
                 showXPGain('Badge updated successfully')
             }
@@ -294,19 +300,82 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
         const result = updateMedal(selectedMedal.id, {
             icon: editingMedal.icon,
             name: editingMedal.name,
-            threshold: editingMedal.threshold
+            threshold: editingMedal.threshold,
+            description: editingMedal.description
         })
 
         if (result.success) {
             loadData()
             setSelectedMedal(null)
-            setEditingMedal({ icon: '', name: '', threshold: 0, year: 0, month: 0 })
+            setEditingMedal({ icon: '', name: '', threshold: 0, description: '', year: 0, month: 0 })
             if (showXPGain) {
                 showXPGain('Medal updated successfully')
             }
         } else {
             if (showXPLoss) {
                 showXPLoss('Error updating medal: ' + result.error)
+            }
+        }
+    }
+
+    const handleCreateBadge = () => {
+        if (!newBadge.icon || !newBadge.name || newBadge.xp <= 0) {
+            if (showXPLoss) {
+                showXPLoss('Please fill all fields correctly')
+            }
+            return
+        }
+
+        const selectedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`
+        const badge = createCustomBadge({
+            name: newBadge.name,
+            icon: newBadge.icon,
+            xpBoost: newBadge.xp,
+            description: newBadge.description
+        }, selectedDate)
+
+        if (badge) {
+            loadData()
+            setShowCreateBadge(false)
+            setNewBadge({ icon: '', name: '', xp: 0, description: '' })
+            if (showBadge) {
+                showBadge(badge)
+            }
+        } else {
+            if (showXPLoss) {
+                showXPLoss('Error creating badge')
+            }
+        }
+    }
+
+    const handleCreateMedal = () => {
+        if (!newMedal.icon || !newMedal.name || newMedal.threshold <= 0) {
+            if (showXPLoss) {
+                showXPLoss('Please fill all fields correctly')
+            }
+            return
+        }
+
+        const year = currentDate.getFullYear()
+        const month = currentDate.getMonth() + 1
+        const medal = createCustomMedal({
+            name: newMedal.name,
+            icon: newMedal.icon,
+            threshold: newMedal.threshold,
+            description: newMedal.description
+        }, year, month)
+
+        if (medal) {
+            loadData()
+            setShowCreateMedal(false)
+            setNewMedal({ icon: '', name: '', threshold: 0, description: '' })
+            if (showMedal) {
+                const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                showMedal(medal, monthName)
+            }
+        } else {
+            if (showXPLoss) {
+                showXPLoss('Error creating medal')
             }
         }
     }
@@ -528,7 +597,16 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
 
                 {/* All Badges Gallery */}
                 <div className="bg-white border-2 border-line rounded-lg shadow-lg p-6 mb-8">
-                    <h3 className="text-xl font-bold text-ink mb-4">🏆 All Badges</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-bold text-ink">🏆 All Badges</h3>
+                        <button
+                            onClick={() => setShowCreateBadge(true)}
+                            className="w-8 h-8 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center justify-center text-xl font-bold shadow-md"
+                            title="Create custom badge"
+                        >
+                            +
+                        </button>
+                    </div>
                     <p className="text-sm text-ink/60 mb-4">Double-click to award • Click dot to view/delete</p>
                     <div className="overflow-x-auto pb-2">
                         <div className="flex gap-4 min-w-min">
@@ -580,7 +658,16 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
 
                 {/* All Medals Gallery */}
                 <div className="bg-white border-2 border-line rounded-lg shadow-lg p-6 mb-8">
-                    <h3 className="text-xl font-bold text-ink mb-4">🏅 All Medals</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-bold text-ink">🏅 All Medals</h3>
+                        <button
+                            onClick={() => setShowCreateMedal(true)}
+                            className="w-8 h-8 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center justify-center text-xl font-bold shadow-md"
+                            title="Create custom medal"
+                        >
+                            +
+                        </button>
+                    </div>
                     <p className="text-sm text-ink/60 mb-4">Double-click to award • Click dot to view/delete</p>
                     <div className="overflow-x-auto pb-2">
                         <div className="flex gap-4 min-w-min">
@@ -717,11 +804,14 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-ink mb-1">Date</label>
-                                <div className="px-3 py-2 bg-gray-100 rounded-lg text-ink/60">
-                                    {editingBadge.date}
-                                </div>
-                                <p className="text-xs text-ink/60 mt-1">Use day navigation to change the date</p>
+                                <label className="block text-sm font-medium text-ink mb-1">Description</label>
+                                <textarea
+                                    value={editingBadge.description}
+                                    onChange={(e) => setEditingBadge({ ...editingBadge, description: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    placeholder="What does this badge represent?"
+                                    rows="3"
+                                />
                             </div>
                         </div>
                         <div className="flex gap-2">
@@ -786,11 +876,14 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-ink mb-1">Month & Year</label>
-                                <div className="px-3 py-2 bg-gray-100 rounded-lg text-ink/60">
-                                    {new Date(editingMedal.year, editingMedal.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                                </div>
-                                <p className="text-xs text-ink/60 mt-1">Medal month/year cannot be changed</p>
+                                <label className="block text-sm font-medium text-ink mb-1">Description</label>
+                                <textarea
+                                    value={editingMedal.description}
+                                    onChange={(e) => setEditingMedal({ ...editingMedal, description: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    placeholder="What does this medal represent?"
+                                    rows="3"
+                                />
                             </div>
                         </div>
                         <div className="flex gap-2">
@@ -808,6 +901,144 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                             </button>
                             <button
                                 onClick={() => setSelectedMedal(null)}
+                                className="flex-1 px-4 py-2 bg-gray-300 text-ink rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Badge Modal */}
+            {showCreateBadge && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateBadge(false)}>
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-ink mb-4">Create Custom Badge</h3>
+                        <div className="mb-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">Emoji</label>
+                                <input
+                                    type="text"
+                                    value={newBadge.icon}
+                                    onChange={(e) => setNewBadge({ ...newBadge, icon: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-2xl text-center"
+                                    placeholder="🏆"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">Name</label>
+                                <input
+                                    type="text"
+                                    value={newBadge.name}
+                                    onChange={(e) => setNewBadge({ ...newBadge, name: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Badge Name"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">XP Boost</label>
+                                <input
+                                    type="number"
+                                    value={newBadge.xp}
+                                    onChange={(e) => setNewBadge({ ...newBadge, xp: parseInt(e.target.value) || 0 })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="50"
+                                    min="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">Description</label>
+                                <textarea
+                                    value={newBadge.description}
+                                    onChange={(e) => setNewBadge({ ...newBadge, description: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    placeholder="What does this badge represent?"
+                                    rows="3"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleCreateBadge}
+                                className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium"
+                            >
+                                Create
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowCreateBadge(false)
+                                    setNewBadge({ icon: '', name: '', xp: 0, description: '' })
+                                }}
+                                className="flex-1 px-4 py-2 bg-gray-300 text-ink rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Medal Modal */}
+            {showCreateMedal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateMedal(false)}>
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-ink mb-4">Create Custom Medal</h3>
+                        <div className="mb-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">Emoji</label>
+                                <input
+                                    type="text"
+                                    value={newMedal.icon}
+                                    onChange={(e) => setNewMedal({ ...newMedal, icon: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-2xl text-center"
+                                    placeholder="🥇"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">Name</label>
+                                <input
+                                    type="text"
+                                    value={newMedal.name}
+                                    onChange={(e) => setNewMedal({ ...newMedal, name: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Medal Name"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">XP Threshold</label>
+                                <input
+                                    type="number"
+                                    value={newMedal.threshold}
+                                    onChange={(e) => setNewMedal({ ...newMedal, threshold: parseInt(e.target.value) || 0 })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="100"
+                                    min="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-ink mb-1">Description</label>
+                                <textarea
+                                    value={newMedal.description}
+                                    onChange={(e) => setNewMedal({ ...newMedal, description: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    placeholder="What does this medal represent?"
+                                    rows="3"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleCreateMedal}
+                                className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium"
+                            >
+                                Create
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowCreateMedal(false)
+                                    setNewMedal({ icon: '', name: '', threshold: 0, description: '' })
+                                }}
                                 className="flex-1 px-4 py-2 bg-gray-300 text-ink rounded-lg hover:bg-gray-400 transition-colors font-medium"
                             >
                                 Cancel
