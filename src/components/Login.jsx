@@ -7,7 +7,7 @@ function Login({ onLogin }) {
 
     const handleSubmit = (e) => {
         e.preventDefault()
-        
+
         // Simple auth check
         if (username === 'admin' && password === 'admin') {
             // Store auth in localStorage
