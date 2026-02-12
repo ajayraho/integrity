@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { loadHabits, addHabit, updateHabit, deleteHabit } from '../utils/storage'
+import ConfirmDialog from './ConfirmDialog'
 
 function HabitManagement({ onClose }) {
     const [habits, setHabits] = useState([])
     const [showAddForm, setShowAddForm] = useState(false)
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
     const [newHabit, setNewHabit] = useState({
         name: '',
         type: 'checkbox',
@@ -29,10 +31,16 @@ function HabitManagement({ onClose }) {
     }
 
     const handleDeleteHabit = (habitId) => {
-        if (confirm('Are you sure you want to delete this habit?')) {
-            deleteHabit(habitId)
-            loadHabitsData()
-        }
+        setConfirmDialog({
+            isOpen: true,
+            action: () => {
+                deleteHabit(habitId)
+                loadHabitsData()
+                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+            },
+            title: 'Delete Habit',
+            message: 'Are you sure you want to delete this habit? This action cannot be undone.'
+        })
     }
 
     const iconOptions = ['✓', '💪', '📚', '🏃', '🧘', '💧', '🍎', '😴', '📝', '🎯', '⭐', '🔥', '💼', '🎨', '🎵']
@@ -161,6 +169,14 @@ function HabitManagement({ onClose }) {
                     </div>
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.action}
+                onCancel={() => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })}
+            />
         </div>
     )
 }
