@@ -9,7 +9,7 @@ import NavigationButton from './components/NavigationButton'
 import Login from './components/Login'
 import { initializeNotifications } from './utils/notifications'
 import { initSession, clearSession } from './utils/database'
-import { initializeStorage } from './utils/storageNew'
+import { initializeStorage } from './utils/storage'
 import './App.css'
 
 function App() {
