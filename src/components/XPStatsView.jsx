@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getTotalXP, getXPForMonth } from '../utils/storage'
+import { getTotalXP, getXPForMonth, getMedalForMonth, getAllMedals, getBadgesForDate, checkMonthlyMedals } from '../utils/storage'
 
 function XPStatsView() {
     const canvasRef = useRef(null)
@@ -7,6 +7,9 @@ function XPStatsView() {
     const [totalXP, setTotalXP] = useState(0)
     const [monthlyData, setMonthlyData] = useState([])
     const [stats, setStats] = useState({ max: 0, avg: 0, daysActive: 0 })
+    const [currentMedal, setCurrentMedal] = useState(null)
+    const [allMedals, setAllMedals] = useState([])
+    const [todayBadges, setTodayBadges] = useState([])
 
     useEffect(() => {
         loadData()
@@ -57,6 +60,18 @@ function XPStatsView() {
             avg: avgXP,
             daysActive: activeDays.length
         })
+
+        // Get current month's medal
+        checkMonthlyMedals(year, month)
+        const medal = getMedalForMonth(year, month)
+        setCurrentMedal(medal)
+
+        // Get all medals
+        setAllMedals(getAllMedals())
+
+        // Get today's badges
+        const today = new Date().toISOString().split('T')[0]
+        setTodayBadges(getBadgesForDate(today))
     }
 
     const drawGraph = () => {
@@ -207,7 +222,15 @@ function XPStatsView() {
                     >
                         ← Previous
                     </button>
-                    <h2 className="text-2xl font-bold text-ink">{formatMonthYear()}</h2>
+                    <div className="text-center">
+                        <h2 className="text-2xl font-bold text-ink">{formatMonthYear()}</h2>
+                        {currentMedal && (
+                            <div className="flex items-center justify-center gap-2 mt-1">
+                                <span className="text-2xl">{currentMedal.icon}</span>
+                                <span className="text-sm font-semibold text-ink/70">{currentMedal.name}</span>
+                            </div>
+                        )}
+                    </div>
                     <button
                         onClick={() => changeMonth(1)}
                         className="px-4 py-2 bg-white border-2 border-line rounded-lg hover:bg-line/20 transition-colors font-medium"
@@ -215,6 +238,47 @@ function XPStatsView() {
                         Next →
                     </button>
                 </div>
+
+                {/* Today's Badges */}
+                {todayBadges.length > 0 && (
+                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg shadow-lg p-6 mb-8">
+                        <h3 className="text-xl font-bold text-white mb-4">🎯 Today's Badges</h3>
+                        <div className="flex flex-wrap gap-3">
+                            {todayBadges.map(badge => (
+                                <div key={badge.id} className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 flex items-center gap-2">
+                                    <span className="text-2xl">{badge.icon}</span>
+                                    <div>
+                                        <div className="text-white font-semibold text-sm">{badge.name}</div>
+                                        <div className="text-white/80 text-xs">+{badge.xpBoost} XP</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* All Medals */}
+                {allMedals.length > 0 && (
+                    <div className="bg-white border-2 border-line rounded-lg shadow-lg p-6 mb-8">
+                        <h3 className="text-xl font-bold text-ink mb-4">🏅 Medal Collection</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            {allMedals.slice(0, 12).map(medal => (
+                                <div key={medal.id} className="text-center p-4 bg-gradient-to-b from-gray-50 to-white rounded-lg border border-line hover:shadow-md transition-shadow">
+                                    <div className="text-4xl mb-2">{medal.icon}</div>
+                                    <div className="text-xs font-semibold text-ink">{medal.name}</div>
+                                    <div className="text-xs text-ink/60 mt-1">
+                                        {new Date(medal.year, medal.month - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {allMedals.length > 12 && (
+                            <div className="text-center mt-4 text-sm text-ink/60">
+                                + {allMedals.length - 12} more medals
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">

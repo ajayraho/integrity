@@ -3,7 +3,7 @@ import DaySection from './DaySection'
 import JumpToTodayButton from './JumpToTodayButton'
 import { loadEntries, saveEntries, getDefaultTemplate } from '../utils/storage'
 
-function JournalView({ viewType, showXPGain, showXPLoss }) {
+function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal }) {
     const [days, setDays] = useState([])
     const [showJumpButton, setShowJumpButton] = useState(false)
     const topSentinelRef = useRef(null)
@@ -261,6 +261,8 @@ function JournalView({ viewType, showXPGain, showXPLoss }) {
                                 isFirst={index === 0}
                                 showXPGain={showXPGain}
                                 showXPLoss={showXPLoss}
+                                showBadge={showBadge}
+                                showMedal={showMedal}
                             />
                         </div>
                     )

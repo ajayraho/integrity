@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import EditableLine from './EditableLine'
 import DateHeader from './DateHeader'
 import HabitsSection from './HabitsSection'
+import { checkBadgeEligibility } from '../utils/storage'
 
-function DaySection({ day, onUpdate, isFirst, showXPGain, showXPLoss }) {
+function DaySection({ day, onUpdate, isFirst, showXPGain, showXPLoss, showBadge, showMedal }) {
     const sectionRef = useRef(null)
     const [lines, setLines] = useState(day.lines)
 
@@ -14,9 +15,23 @@ function DaySection({ day, onUpdate, isFirst, showXPGain, showXPLoss }) {
     const handleXPChange = (amount, type) => {
         if (type === 'gain') {
             showXPGain?.(Math.abs(amount))
+            // Check for badge eligibility
+            checkBadgesForDay()
         } else if (type === 'loss') {
             showXPLoss?.(Math.abs(amount))
         }
+    }
+
+    const checkBadgesForDay = () => {
+        const dateStr = day.id // Assuming day.id is in YYYY-MM-DD format
+        const earnedBadges = checkBadgeEligibility(dateStr)
+
+        // Show notification for each earned badge
+        earnedBadges.forEach((badge, index) => {
+            setTimeout(() => {
+                showBadge?.(badge)
+            }, index * 1000) // Stagger notifications
+        })
     }
 
     const formatDate = (date) => {

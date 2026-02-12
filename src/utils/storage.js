@@ -6,7 +6,9 @@ let dataCache = {
   habits: [],
   templates: [],
   reminders: [],
-  xpHistory: [] // Array of {date, amount, source, timestamp, lineId/habitId}
+  xpHistory: [], // Array of {date, amount, source, timestamp, lineId/habitId}
+  badges: [], // Array of {id, type, date, timestamp, xpBoost}
+  medals: [] // Array of {id, tier, month, year, xpThreshold, timestamp}
 }
 
 let isInitialized = false
@@ -439,3 +441,240 @@ export function getXPForSource(sourceId, date) {
     return []
   }
 }
+
+// ============= BADGE SYSTEM =============
+
+export const BADGE_TYPES = {
+  DEEP_WORK_2HR: { id: 'deep_work_2hr', name: 'Deep Focus 2H', icon: '🎯', xpBoost: 50, description: 'Complete a 2-hour deep work session' },
+  DEEP_WORK_5HR: { id: 'deep_work_5hr', name: 'Deep Focus 5H', icon: '🔥', xpBoost: 150, description: 'Complete a 5-hour deep work session' },
+  WATER_WARRIOR: { id: 'water_warrior', name: 'Water Warrior', icon: '💧', xpBoost: 30, description: 'Drink 8 glasses of water' },
+  EXERCISE_PRO: { id: 'exercise_pro', name: 'Exercise Pro', icon: '💪', xpBoost: 40, description: 'Complete your exercise routine' },
+  EARLY_BIRD: { id: 'early_bird', name: 'Early Bird', icon: '🌅', xpBoost: 25, description: 'Complete a task before 8 AM' },
+  NIGHT_OWL: { id: 'night_owl', name: 'Night Owl', icon: '🦉', xpBoost: 25, description: 'Complete a task after 10 PM' },
+  TASK_MASTER: { id: 'task_master', name: 'Task Master', icon: '✅', xpBoost: 60, description: 'Complete 10 tasks in a day' },
+  HABIT_STREAK_7: { id: 'habit_streak_7', name: '7-Day Streak', icon: '🔄', xpBoost: 100, description: 'Maintain a habit for 7 days' },
+  PERFECT_DAY: { id: 'perfect_day', name: 'Perfect Day', icon: '⭐', xpBoost: 200, description: 'Complete all habits and 5+ tasks' },
+  READING_BUG: { id: 'reading_bug', name: 'Reading Bug', icon: '📚', xpBoost: 35, description: 'Read for 1 hour' },
+  PRODUCTIVITY_BEAST: { id: 'productivity_beast', name: 'Productivity Beast', icon: '🚀', xpBoost: 150, description: 'Earn 200+ XP in a day' }
+}
+
+export const MEDAL_TIERS = {
+  BRONZE: { id: 'bronze', name: 'Bronze Medal', icon: '🥉', threshold: 100, color: '#CD7F32' },
+  SILVER: { id: 'silver', name: 'Silver Medal', icon: '🥈', threshold: 500, color: '#C0C0C0' },
+  GOLD: { id: 'gold', name: 'Gold Medal', icon: '🥇', threshold: 1000, color: '#FFD700' },
+  PLATINUM: { id: 'platinum', name: 'Platinum Medal', icon: '💎', threshold: 2500, color: '#E5E4E2' },
+  DIAMOND: { id: 'diamond', name: 'Diamond Medal', icon: '💠', threshold: 5000, color: '#B9F2FF' },
+  LEGEND: { id: 'legend', name: 'Legend Medal', icon: '👑', threshold: 10000, color: '#9D00FF' }
+}
+
+/**
+ * Award a badge to user
+ */
+export function awardBadge(badgeType, date) {
+  try {
+    if (!dataCache.badges) {
+      dataCache.badges = []
+    }
+
+    // Check if badge already earned today
+    const existing = dataCache.badges.find(b => b.type === badgeType && b.date === date)
+    if (existing) {
+      return null // Already earned
+    }
+
+    const badgeInfo = BADGE_TYPES[badgeType]
+    if (!badgeInfo) {
+      console.error('Unknown badge type:', badgeType)
+      return null
+    }
+
+    const badge = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      type: badgeType,
+      name: badgeInfo.name,
+      icon: badgeInfo.icon,
+      xpBoost: badgeInfo.xpBoost,
+      date,
+      timestamp: new Date().toISOString()
+    }
+
+    dataCache.badges.push(badge)
+    
+    // Award XP boost
+    addXP(date, badgeInfo.xpBoost, 'badge', badge.id, `Badge: ${badgeInfo.name}`)
+    
+    scheduleSave()
+    return badge
+  } catch (error) {
+    console.error('Error awarding badge:', error)
+    return null
+  }
+}
+
+/**
+ * Get all badges for a specific date
+ */
+export function getBadgesForDate(date) {
+  try {
+    if (!dataCache.badges) return []
+    return dataCache.badges.filter(b => b.date === date)
+  } catch (error) {
+    console.error('Error getting badges for date:', error)
+    return []
+  }
+}
+
+/**
+ * Get all earned badges
+ */
+export function getAllBadges() {
+  try {
+    if (!dataCache.badges) return []
+    return dataCache.badges
+  } catch (error) {
+    console.error('Error getting all badges:', error)
+    return []
+  }
+}
+
+/**
+ * Check if user is eligible for a badge based on date's data
+ */
+export function checkBadgeEligibility(date) {
+  try {
+    const earnedBadges = []
+    const dayXP = getXPForDate(date)
+    const entries = loadEntries().find(e => e.date.toISOString().split('T')[0] === date)
+    
+    // Check PRODUCTIVITY_BEAST (200+ XP in a day)
+    if (dayXP >= 200) {
+      const badge = awardBadge('PRODUCTIVITY_BEAST', date)
+      if (badge) earnedBadges.push(badge)
+    }
+
+    // Check TASK_MASTER (10 completed tasks)
+    if (entries) {
+      const completedTasks = entries.lines.filter(l => 
+        (l.type === 'checkbox' || l.type === 'checkbox-time') && l.checked
+      ).length
+      
+      if (completedTasks >= 10) {
+        const badge = awardBadge('TASK_MASTER', date)
+        if (badge) earnedBadges.push(badge)
+      }
+    }
+
+    return earnedBadges
+  } catch (error) {
+    console.error('Error checking badge eligibility:', error)
+    return []
+  }
+}
+
+// ============= MEDAL SYSTEM =============
+
+/**
+ * Award a medal for monthly XP milestone
+ */
+export function awardMedal(tier, year, month) {
+  try {
+    if (!dataCache.medals) {
+      dataCache.medals = []
+    }
+
+    // Check if medal already earned for this month
+    const existing = dataCache.medals.find(m => m.tier === tier && m.year === year && m.month === month)
+    if (existing) {
+      return null
+    }
+
+    const medalInfo = MEDAL_TIERS[tier]
+    if (!medalInfo) {
+      console.error('Unknown medal tier:', tier)
+      return null
+    }
+
+    const medal = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      tier,
+      name: medalInfo.name,
+      icon: medalInfo.icon,
+      threshold: medalInfo.threshold,
+      year,
+      month,
+      timestamp: new Date().toISOString()
+    }
+
+    dataCache.medals.push(medal)
+    scheduleSave()
+    return medal
+  } catch (error) {
+    console.error('Error awarding medal:', error)
+    return null
+  }
+}
+
+/**
+ * Get medal for specific month
+ */
+export function getMedalForMonth(year, month) {
+  try {
+    if (!dataCache.medals) return null
+    
+    // Get all medals for this month and return the highest tier
+    const monthMedals = dataCache.medals.filter(m => m.year === year && m.month === month)
+    if (monthMedals.length === 0) return null
+    
+    // Sort by threshold descending to get highest tier
+    monthMedals.sort((a, b) => b.threshold - a.threshold)
+    return monthMedals[0]
+  } catch (error) {
+    console.error('Error getting medal for month:', error)
+    return null
+  }
+}
+
+/**
+ * Get all medals
+ */
+export function getAllMedals() {
+  try {
+    if (!dataCache.medals) return []
+    return dataCache.medals.sort((a, b) => {
+      // Sort by year, then month, then threshold (descending)
+      if (a.year !== b.year) return b.year - a.year
+      if (a.month !== b.month) return b.month - a.month
+      return b.threshold - a.threshold
+    })
+  } catch (error) {
+    console.error('Error getting all medals:', error)
+    return []
+  }
+}
+
+/**
+ * Check and award medal based on monthly XP
+ */
+export function checkMonthlyMedals(year, month) {
+  try {
+    const monthlyData = getXPForMonth(year, month)
+    const totalXP = monthlyData.reduce((sum, day) => sum + day.total, 0)
+
+    let awardedMedal = null
+    
+    // Check from highest to lowest tier
+    const tiers = ['LEGEND', 'DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE']
+    for (const tier of tiers) {
+      if (totalXP >= MEDAL_TIERS[tier].threshold) {
+        awardedMedal = awardMedal(tier, year, month)
+        break
+      }
+    }
+
+    return awardedMedal
+  } catch (error) {
+    console.error('Error checking monthly medals:', error)
+    return null
+  }
+}
+

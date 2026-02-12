@@ -9,7 +9,10 @@ import HabitManagement from './components/HabitManagement'
 import NavigationButton from './components/NavigationButton'
 import Login from './components/Login'
 import Toast from './components/Toast'
+import BadgeUnlockNotification from './components/BadgeUnlockNotification'
+import MedalUnlockNotification from './components/MedalUnlockNotification'
 import { useToast } from './hooks/useToast'
+import { useBadgesAndMedals } from './hooks/useBadgesAndMedals'
 import { initializeNotifications } from './utils/notifications'
 import { initSession, clearSession } from './utils/database'
 import { initializeStorage } from './utils/storage'
@@ -22,6 +25,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const { toasts, showXPGain, showXPLoss, removeToast } = useToast()
+  const { badgeNotification, showBadge, hideBadge, medalNotification, showMedal, hideMedal } = useBadgesAndMedals()
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -112,7 +116,13 @@ function App() {
       case 'xp-stats':
         return <XPStatsView />
       case 'continuous':
-        return <JournalView viewType={currentView} showXPGain={showXPGain} showXPLoss={showXPLoss} />
+        return <JournalView
+          viewType={currentView}
+          showXPGain={showXPGain}
+          showXPLoss={showXPLoss}
+          showBadge={showBadge}
+          showMedal={showMedal}
+        />
       case 'calendar':
         return <CalendarView />
       case 'timeline':
@@ -154,6 +164,23 @@ function App() {
           />
         </div>
       ))}
+
+      {/* Badge notification */}
+      {badgeNotification && (
+        <BadgeUnlockNotification
+          badge={badgeNotification}
+          onClose={hideBadge}
+        />
+      )}
+
+      {/* Medal notification */}
+      {medalNotification && (
+        <MedalUnlockNotification
+          medal={medalNotification.medal}
+          monthName={medalNotification.monthName}
+          onClose={hideMedal}
+        />
+      )}
     </div>
   )
 }
