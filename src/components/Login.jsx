@@ -1,22 +1,46 @@
 import { useState } from 'react'
+import { loginUser, registerUser } from '../utils/database'
 
 function Login({ onLogin }) {
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
+    const [isRegisterMode, setIsRegisterMode] = useState(false)
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
+        setError('')
+        setLoading(true)
 
-        // Simple auth check
-        if (username === 'admin' && password === 'admin') {
-            // Store auth in localStorage
-            localStorage.setItem('isAuthenticated', 'true')
-            localStorage.setItem('username', username)
-            onLogin()
-        } else {
-            setError('Invalid credentials. Use admin/admin')
-            setPassword('')
+        try {
+            let result
+            
+            if (isRegisterMode) {
+                // Register new user
+                result = await registerUser(username, password)
+                if (result.success) {
+                    localStorage.setItem('isAuthenticated', 'true')
+                    localStorage.setItem('username', username)
+                    onLogin(username, password)
+                } else {
+                    setError(result.error || 'Registration failed')
+                }
+            } else {
+                // Login existing user
+                result = await loginUser(username, password)
+                if (result.success) {
+                    localStorage.setItem('isAuthenticated', 'true')
+                    localStorage.setItem('username', username)
+                    onLogin(username, password)
+                } else {
+                    setError(result.error || 'Login failed')
+                }
+            }
+        } catch (err) {
+            setError(err.message || 'An error occurred')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -74,14 +98,27 @@ function Login({ onLogin }) {
 
                     <button
                         type="submit"
-                        className="w-full bg-ink text-white py-3 rounded-lg font-medium hover:bg-ink/90 transition-colors"
+                        disabled={loading}
+                        className="w-full bg-ink text-white py-3 rounded-lg font-medium hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Login
+                        {loading ? 'Please wait...' : (isRegisterMode ? 'Register' : 'Login')}
                     </button>
                 </form>
 
+                <div className="mt-4 text-center">
+                    <button
+                        onClick={() => {
+                            setIsRegisterMode(!isRegisterMode)
+                            setError('')
+                        }}
+                        className="text-sm text-ink/60 hover:text-ink underline"
+                    >
+                        {isRegisterMode ? 'Already have an account? Login' : 'New user? Register here'}
+                    </button>
+                </div>
+
                 <div className="mt-6 text-center text-xs text-ink/40">
-                    Default credentials: admin / admin
+                    {isRegisterMode ? 'Create your encrypted account' : 'Login to access your encrypted data'}
                 </div>
             </div>
         </div>

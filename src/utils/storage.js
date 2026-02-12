@@ -1,55 +1,99 @@
-// Storage keys
-const ENTRIES_KEY = 'integrity_journal_entries'
-const TEMPLATES_KEY = 'integrity_templates'
-const SETTINGS_KEY = 'integrity_settings'
-const HABITS_KEY = 'integrity_habits'
-const REMINDERS_KEY = 'integrity_reminders'
+import { loadAllData, saveAllData } from './database'
 
-// Load journal entries
-export function loadEntries() {
+// In-memory cache
+let dataCache = {
+  entries: [],
+  habits: [],
+  templates: [],
+  reminders: []
+}
+
+let isInitialized = false
+let saveTimeout = null
+
+/**
+ * Initialize storage by loading from database
+ */
+export async function initializeStorage() {
   try {
-    const data = localStorage.getItem(ENTRIES_KEY)
-    if (data) {
-      const entries = JSON.parse(data)
-      // Convert date strings back to Date objects
-      return entries.map(entry => ({
-        ...entry,
-        date: new Date(entry.date)
-      }))
+    const data = await loadAllData()
+    dataCache = data
+    isInitialized = true
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to initialize storage:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Save all data to database with debouncing
+ */
+function scheduleSave() {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+  
+  saveTimeout = setTimeout(async () => {
+    try {
+      await saveAllData(dataCache)
+      console.log('Data saved to database')
+    } catch (error) {
+      console.error('Failed to save to database:', error)
     }
-    return []
+  }, 1000) // Save after 1 second of inactivity
+}
+
+/**
+ * Force immediate save
+ */
+export async function forceSave() {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+    saveTimeout = null
+  }
+  try {
+    await saveAllData(dataCache)
+    return { success: true }
   } catch (error) {
-    console.error('Error loading entries:', error)
-    return []
+    console.error('Failed to force save:', error)
+    return { success: false, error: error.message }
   }
 }
 
-// Save journal entries
+// ============= ENTRIES =============
+
+export function loadEntries() {
+  if (!isInitialized) {
+    console.warn('Storage not initialized, returning empty entries')
+    return []
+  }
+  // Convert date strings back to Date objects
+  return dataCache.entries.map(entry => ({
+    ...entry,
+    date: new Date(entry.date)
+  }))
+}
+
 export function saveEntries(entries) {
-  try {
-    localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries))
-    return true
-  } catch (error) {
-    console.error('Error saving entries:', error)
-    return false
-  }
+  dataCache.entries = entries
+  scheduleSave()
+  return true
 }
 
-// Load templates
+// ============= TEMPLATES =============
+
 export function loadTemplates() {
-  try {
-    const data = localStorage.getItem(TEMPLATES_KEY)
-    return data ? JSON.parse(data) : []
-  } catch (error) {
-    console.error('Error loading templates:', error)
+  if (!isInitialized) {
+    console.warn('Storage not initialized, returning empty templates')
     return []
   }
+  return dataCache.templates
 }
 
-// Save a new template
 export function saveTemplate(template) {
   try {
-    const templates = loadTemplates()
+    const templates = dataCache.templates
     
     // If this is set as default, remove default from others
     if (template.isDefault) {
@@ -59,7 +103,8 @@ export function saveTemplate(template) {
     // Add unique ID
     template.id = Date.now().toString()
     templates.push(template)
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates))
+    dataCache.templates = templates
+    scheduleSave()
     return true
   } catch (error) {
     console.error('Error saving template:', error)
@@ -67,11 +112,10 @@ export function saveTemplate(template) {
   }
 }
 
-// Update an existing template
 export function updateTemplate(templateId, updates) {
   try {
     console.log('updateTemplate called with:', templateId, updates)
-    const templates = loadTemplates()
+    const templates = dataCache.templates
     console.log('Current templates:', templates)
     const index = templates.findIndex(t => t.id === templateId)
     console.log('Template index:', index)
@@ -82,13 +126,13 @@ export function updateTemplate(templateId, updates) {
         templates.forEach(t => t.isDefault = false)
       }
       
+      // Merge updates
       templates[index] = { ...templates[index], ...updates }
-      console.log('Updated template:', templates[index])
-      localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates))
-      console.log('Saved to localStorage')
+      dataCache.templates = templates
+      scheduleSave()
+      console.log('Updated templates:', templates)
       return true
     }
-    console.log('Template not found')
     return false
   } catch (error) {
     console.error('Error updating template:', error)
@@ -96,16 +140,15 @@ export function updateTemplate(templateId, updates) {
   }
 }
 
-// Delete a template
 export function deleteTemplate(templateId) {
   try {
     console.log('deleteTemplate called with:', templateId)
-    const templates = loadTemplates()
-    console.log('Current templates:', templates)
+    const templates = dataCache.templates
+    console.log('Templates before delete:', templates)
     const filtered = templates.filter(t => t.id !== templateId)
-    console.log('Filtered templates:', filtered)
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(filtered))
-    console.log('Saved to localStorage')
+    console.log('Templates after filter:', filtered)
+    dataCache.templates = filtered
+    scheduleSave()
     return true
   } catch (error) {
     console.error('Error deleting template:', error)
@@ -113,101 +156,49 @@ export function deleteTemplate(templateId) {
   }
 }
 
-// Get default template
 export function getDefaultTemplate() {
-  const templates = loadTemplates()
+  const templates = dataCache.templates
   return templates.find(t => t.isDefault) || null
 }
 
-// Load settings
-export function loadSettings() {
-  try {
-    const data = localStorage.getItem(SETTINGS_KEY)
-    return data ? JSON.parse(data) : {
-      fontSize: 'medium',
-      theme: 'paper',
-      autoSave: true
-    }
-  } catch (error) {
-    console.error('Error loading settings:', error)
-    return {}
-  }
-}
+// ============= HABITS =============
 
-// Save settings
-export function saveSettings(settings) {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-    return true
-  } catch (error) {
-    console.error('Error saving settings:', error)
-    return false
-  }
-}
-
-// Clear all data (useful for debugging)
-export function clearAllData() {
-  localStorage.removeItem(ENTRIES_KEY)
-  localStorage.removeItem(TEMPLATES_KEY)
-  localStorage.removeItem(SETTINGS_KEY)
-  localStorage.removeItem(HABITS_KEY)
-}
-
-// ===== HABITS MANAGEMENT =====
-
-// Load all habits
 export function loadHabits() {
-  try {
-    const data = localStorage.getItem(HABITS_KEY)
-    return data ? JSON.parse(data) : []
-  } catch (error) {
-    console.error('Error loading habits:', error)
+  if (!isInitialized) {
+    console.warn('Storage not initialized, returning empty habits')
     return []
   }
+  return dataCache.habits
 }
 
-// Save all habits
 export function saveHabits(habits) {
-  try {
-    localStorage.setItem(HABITS_KEY, JSON.stringify(habits))
-    return true
-  } catch (error) {
-    console.error('Error saving habits:', error)
-    return false
-  }
+  dataCache.habits = habits
+  scheduleSave()
+  return true
 }
 
-// Add a new habit
 export function addHabit(habit) {
   try {
-    const habits = loadHabits()
-    const newHabit = {
-      id: `habit-${Date.now()}`,
-      name: habit.name,
-      type: habit.type || 'checkbox', // checkbox, number, text
-      icon: habit.icon || '✓',
-      color: habit.color || '#2C3E50',
-      order: habits.length,
-      createdAt: new Date().toISOString(),
-      ...habit
-    }
-    habits.push(newHabit)
-    saveHabits(habits)
-    return newHabit
+    const habits = dataCache.habits
+    habit.id = Date.now().toString()
+    habits.push(habit)
+    dataCache.habits = habits
+    scheduleSave()
+    return habit
   } catch (error) {
     console.error('Error adding habit:', error)
     return null
   }
 }
 
-// Update a habit
 export function updateHabit(habitId, updates) {
   try {
-    const habits = loadHabits()
+    const habits = dataCache.habits
     const index = habits.findIndex(h => h.id === habitId)
     if (index !== -1) {
       habits[index] = { ...habits[index], ...updates }
-      saveHabits(habits)
+      dataCache.habits = habits
+      scheduleSave()
       return true
     }
     return false
@@ -217,12 +208,11 @@ export function updateHabit(habitId, updates) {
   }
 }
 
-// Delete a habit
 export function deleteHabit(habitId) {
   try {
-    const habits = loadHabits()
-    const filtered = habits.filter(h => h.id !== habitId)
-    saveHabits(filtered)
+    const habits = dataCache.habits
+    dataCache.habits = habits.filter(h => h.id !== habitId)
+    scheduleSave()
     return true
   } catch (error) {
     console.error('Error deleting habit:', error)
@@ -230,87 +220,64 @@ export function deleteHabit(habitId) {
   }
 }
 
-// Reorder habits
-export function reorderHabits(habitIds) {
-  try {
-    const habits = loadHabits()
-    const reordered = habitIds.map((id, index) => {
-      const habit = habits.find(h => h.id === id)
-      return { ...habit, order: index }
-    })
-    saveHabits(reordered)
-    return true
-  } catch (error) {
-    console.error('Error reordering habits:', error)
-    return false
-  }
-}
+// ============= REMINDERS =============
 
-// ==================== Reminders ====================
-
-// Load all reminders
 export function loadReminders() {
-  try {
-    const data = localStorage.getItem(REMINDERS_KEY)
-    if (data) {
-      const reminders = JSON.parse(data)
-      // Convert date strings back to Date objects
-      return reminders.map(reminder => ({
-        ...reminder,
-        datetime: new Date(reminder.datetime),
-        createdAt: new Date(reminder.createdAt)
-      }))
-    }
-    return []
-  } catch (error) {
-    console.error('Error loading reminders:', error)
+  if (!isInitialized) {
+    console.warn('Storage not initialized, returning empty reminders')
     return []
   }
+  return dataCache.reminders
 }
 
-// Save reminders
-function saveRemindersData(reminders) {
+export function saveReminder(reminder) {
   try {
-    localStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders))
-    return true
+    const reminders = dataCache.reminders
+    reminder.id = Date.now().toString()
+    reminders.push(reminder)
+    dataCache.reminders = reminders
+    scheduleSave()
+    return reminder
   } catch (error) {
-    console.error('Error saving reminders:', error)
-    return false
-  }
-}
-
-// Add a new reminder
-export function addReminder(reminder) {
-  try {
-    const reminders = loadReminders()
-    const newReminder = {
-      id: `reminder-${Date.now()}`,
-      lineId: reminder.lineId,
-      dayId: reminder.dayId,
-      lineContent: reminder.lineContent,
-      datetime: reminder.datetime,
-      recurring: reminder.recurring || 'none', // none, daily, weekly, monthly, custom
-      customRecurring: reminder.customRecurring || null, // for custom patterns
-      enabled: true,
-      createdAt: new Date()
-    }
-    reminders.push(newReminder)
-    saveRemindersData(reminders)
-    return newReminder
-  } catch (error) {
-    console.error('Error adding reminder:', error)
+    console.error('Error saving reminder:', error)
     return null
   }
 }
 
-// Update a reminder
+export function addReminder(reminder) {
+  return saveReminder(reminder)
+}
+
+export function getRemindersForLine(lineId) {
+  try {
+    const reminders = dataCache.reminders
+    return reminders.filter(r => r.lineId === lineId)
+  } catch (error) {
+    console.error('Error getting reminders:', error)
+    return []
+  }
+}
+
+export function deleteReminder(reminderId) {
+  try {
+    const reminders = dataCache.reminders
+    dataCache.reminders = reminders.filter(r => r.id !== reminderId)
+    scheduleSave()
+    return true
+  } catch (error) {
+    console.error('Error deleting reminder:', error)
+    return false
+  }
+}
+
 export function updateReminder(reminderId, updates) {
   try {
-    const reminders = loadReminders()
+    const reminders = dataCache.reminders
     const index = reminders.findIndex(r => r.id === reminderId)
     if (index !== -1) {
       reminders[index] = { ...reminders[index], ...updates }
-      saveRemindersData(reminders)
+      dataCache.reminders = reminders
+      scheduleSave()
       return true
     }
     return false
@@ -320,37 +287,25 @@ export function updateReminder(reminderId, updates) {
   }
 }
 
-// Delete a reminder
-export function deleteReminder(reminderId) {
+// ============= SETTINGS =============
+
+export function loadSettings() {
+  // Settings can remain in localStorage for now (theme, preferences, etc.)
   try {
-    const reminders = loadReminders()
-    const filtered = reminders.filter(r => r.id !== reminderId)
-    saveRemindersData(filtered)
+    const data = localStorage.getItem('integrity_settings')
+    return data ? JSON.parse(data) : {}
+  } catch (error) {
+    console.error('Error loading settings:', error)
+    return {}
+  }
+}
+
+export function saveSettings(settings) {
+  try {
+    localStorage.setItem('integrity_settings', JSON.stringify(settings))
     return true
   } catch (error) {
-    console.error('Error deleting reminder:', error)
+    console.error('Error saving settings:', error)
     return false
-  }
-}
-
-// Get reminders for a specific line
-export function getRemindersForLine(lineId) {
-  try {
-    const reminders = loadReminders()
-    return reminders.filter(r => r.lineId === lineId && r.enabled)
-  } catch (error) {
-    console.error('Error getting reminders for line:', error)
-    return []
-  }
-}
-
-// Get all active reminders
-export function getActiveReminders() {
-  try {
-    const reminders = loadReminders()
-    return reminders.filter(r => r.enabled)
-  } catch (error) {
-    console.error('Error getting active reminders:', error)
-    return []
   }
 }
