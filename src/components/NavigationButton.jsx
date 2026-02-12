@@ -47,6 +47,16 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
 
                     <button
                         onClick={() => {
+                            window.location.reload()
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors flex items-center gap-2"
+                    >
+                        <span className="text-lg">🔄</span>
+                        <span className="text-sm text-ink">Refresh</span>
+                    </button>
+
+                    <button
+                        onClick={() => {
                             setConfirmDialog({
                                 isOpen: true,
                                 action: () => {
