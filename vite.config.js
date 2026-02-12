@@ -8,23 +8,29 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.ico', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Integrity - Journal',
+        name: 'Integrity - Daily Journal & Habit Tracker',
         short_name: 'Integrity',
-        description: 'Your personal continuous journal',
-        theme_color: '#FFFEF7',
+        description: 'Your personal encrypted journal with habit tracking',
+        theme_color: '#1a1a1a',
         background_color: '#FFFEF7',
         display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        orientation: 'portrait-primary',
         icons: [
           {
             src: '/icon-192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           },
           {
             src: '/icon-512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       },
