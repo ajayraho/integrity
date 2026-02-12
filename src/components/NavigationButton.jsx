@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import ConfirmDialog from './ConfirmDialog'
 
 function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout }) {
     const [showMenu, setShowMenu] = useState(false)
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
     const views = [
         { id: 'continuous', label: 'Continuous Scroll', icon: '📜' },
@@ -45,10 +47,16 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
 
                     <button
                         onClick={() => {
-                            if (confirm('Are you sure you want to logout?')) {
-                                onLogout()
-                                setShowMenu(false)
-                            }
+                            setConfirmDialog({
+                                isOpen: true,
+                                action: () => {
+                                    onLogout()
+                                    setShowMenu(false)
+                                    setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+                                },
+                                title: 'Logout',
+                                message: 'Are you sure you want to logout? All your data is safely stored in the encrypted database.'
+                            })
                         }}
                         className="w-full text-left px-4 py-2 hover:bg-red-50 transition-colors flex items-center gap-2 text-red-600"
                     >
@@ -57,6 +65,16 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
                     </button>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.action}
+                onCancel={() => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })}
+                confirmText="Logout"
+                confirmStyle="danger"
+            />
 
             <button
                 onClick={() => setShowMenu(!showMenu)}
