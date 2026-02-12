@@ -15,7 +15,11 @@ function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal })
 
     // Create a day object
     const createDay = useCallback((date) => {
-        const dateId = date.toISOString().split('T')[0]
+        // Format date as YYYY-MM-DD using local time (not UTC)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const dateId = `${year}-${month}-${day}`
 
         // Check if there's a default template
         const defaultTemplate = getDefaultTemplate()
@@ -30,7 +34,7 @@ function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal })
             }))
         } else {
             // Default single empty line
-            lines = [{ id: `${date.toISOString()}-1`, content: '', type: 'text' }]
+            lines = [{ id: `${dateId}-1`, content: '', type: 'text' }]
         }
 
         return {
@@ -53,7 +57,10 @@ function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal })
 
         // Start with just today
         const today = new Date()
-        const todayId = today.toISOString().split('T')[0]
+        const year = today.getFullYear()
+        const month = String(today.getMonth() + 1).padStart(2, '0')
+        const day = String(today.getDate()).padStart(2, '0')
+        const todayId = `${year}-${month}-${day}`
 
         // Check if today has saved content, otherwise create new
         const todayEntry = savedMap.get(todayId) || createDay(today)
@@ -99,7 +106,10 @@ function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal })
             for (let i = 1; i <= 7; i++) {
                 const date = new Date(oldestDate)
                 date.setDate(oldestDate.getDate() - i)
-                const dayId = date.toISOString().split('T')[0]
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                const dayId = `${year}-${month}-${day}`
 
                 if (!existingIds.has(dayId)) {
                     // Check if this day has saved content
@@ -140,7 +150,10 @@ function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal })
             for (let i = 1; i <= 7; i++) {
                 const date = new Date(newestDate)
                 date.setDate(newestDate.getDate() + i)
-                const dayId = date.toISOString().split('T')[0]
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                const dayId = `${year}-${month}-${day}`
 
                 if (!existingIds.has(dayId)) {
                     // Check if this day has saved content
@@ -248,10 +261,11 @@ function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal })
 
                 {days.map((day, index) => {
                     const today = new Date()
-                    today.setHours(0, 0, 0, 0)
-                    const dayDate = new Date(day.date)
-                    dayDate.setHours(0, 0, 0, 0)
-                    const isToday = dayDate.getTime() === today.getTime()
+                    const year = today.getFullYear()
+                    const month = String(today.getMonth() + 1).padStart(2, '0')
+                    const dayNum = String(today.getDate()).padStart(2, '0')
+                    const todayId = `${year}-${month}-${dayNum}`
+                    const isToday = day.id === todayId
 
                     return (
                         <div key={day.id} ref={isToday ? todayRef : null}>
