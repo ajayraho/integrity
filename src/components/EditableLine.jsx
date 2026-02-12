@@ -151,17 +151,17 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                     <div className="flex items-start gap-2">
                         <input
                             type="checkbox"
-                            className="mt-1.5 w-4 h-4 cursor-pointer"
+                            className="mt-1.5 w-4 h-4 cursor-pointer flex-shrink-0"
                         />
                         <input
                             type="time"
-                            className="mt-0.5 px-2 py-0.5 border border-line rounded text-sm bg-transparent"
+                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-20 sm:w-auto"
                             defaultValue="00:00"
                         />
-                        <span className="mt-1.5">-</span>
+                        <span className="mt-1.5 flex-shrink-0">-</span>
                         <input
                             type="time"
-                            className="mt-0.5 px-2 py-0.5 border border-line rounded text-sm bg-transparent"
+                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-20 sm:w-auto"
                             defaultValue="00:00"
                         />
                         <div
@@ -171,7 +171,7 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                             onKeyDown={handleKeyDown}
                             onInput={handleInput}
                             data-line-id={line.id}
-                            className="flex-1 outline-none text-ink bg-transparent"
+                            className="flex-1 outline-none text-ink bg-transparent min-w-0"
                             style={{
                                 minHeight: '32px',
                                 lineHeight: '32px',

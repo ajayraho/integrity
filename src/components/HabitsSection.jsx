@@ -79,7 +79,7 @@ function HabitsSection({ dayId, habits, onUpdate }) {
                         value={value || ''}
                         onChange={(e) => handleHabitChange(habit.id, e.target.value)}
                         placeholder="0"
-                        className="w-16 px-2 py-1 border border-line rounded text-center bg-transparent outline-none focus:border-ink"
+                        className="w-14 sm:w-16 px-2 py-1 border border-line rounded text-center bg-transparent outline-none focus:border-ink"
                         style={{ fontSize: '16px' }}
                     />
                 )
@@ -91,7 +91,7 @@ function HabitsSection({ dayId, habits, onUpdate }) {
                         value={value || ''}
                         onChange={(e) => handleHabitChange(habit.id, e.target.value)}
                         placeholder="..."
-                        className="w-32 px-2 py-1 border border-line rounded bg-transparent outline-none focus:border-ink"
+                        className="w-24 sm:w-32 px-2 py-1 border border-line rounded bg-transparent outline-none focus:border-ink"
                         style={{ fontSize: '16px' }}
                     />
                 )
