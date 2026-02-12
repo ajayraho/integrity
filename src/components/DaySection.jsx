@@ -57,9 +57,12 @@ function DaySection({ day, onUpdate, isFirst }) {
         setLines(newLines)
         onUpdate(day.id, newLines, day.habits)
 
-        // Return the previous line's ID if it exists
+        // Return the previous line's ID if it exists, otherwise return the next line (which becomes the new line at this position)
         if (lineIndex > 0) {
             return lines[lineIndex - 1].id
+        } else if (newLines.length > 0) {
+            // If deleting the first line, return the ID of what will become the new first line
+            return newLines[0].id
         }
         return null
     }
@@ -69,6 +72,7 @@ function DaySection({ day, onUpdate, isFirst }) {
     }
 
     const applyTemplate = (template) => {
+        console.log('applyTemplate called with:', template)
         if (template && template.lines) {
             // Create new lines from template with unique IDs
             const newLines = template.lines.map((templateLine, index) => ({
@@ -77,8 +81,11 @@ function DaySection({ day, onUpdate, isFirst }) {
                 content: templateLine.content || ''
             }))
 
+            console.log('Applying new lines:', newLines)
             setLines(newLines)
             onUpdate(day.id, newLines, day.habits)
+        } else {
+            console.log('Template is invalid or has no lines')
         }
     }
 
@@ -101,6 +108,7 @@ function DaySection({ day, onUpdate, isFirst }) {
             <DateHeader
                 date={formatDate(day.date)}
                 dayId={day.id}
+                dayDate={day.date}
                 lines={lines}
                 onApplyTemplate={applyTemplate}
             />
@@ -116,16 +124,18 @@ function DaySection({ day, onUpdate, isFirst }) {
                         onDelete={() => {
                             const prevLineId = deleteLine(line.id)
                             if (prevLineId) {
-                                // Focus the previous line at the end
+                                // Focus the previous/next line
                                 setTimeout(() => {
-                                    const prevLine = document.querySelector(`[data-line-id="${prevLineId}"]`)
-                                    if (prevLine) {
-                                        prevLine.focus()
-                                        // Move cursor to end
+                                    const targetLine = document.querySelector(`[data-line-id="${prevLineId}"]`)
+                                    if (targetLine) {
+                                        targetLine.focus()
+                                        // Move cursor to end if it was a previous line (normal delete)
+                                        // Move cursor to start if it's the new first line (deleted first line)
                                         const range = document.createRange()
                                         const selection = window.getSelection()
-                                        range.selectNodeContents(prevLine)
-                                        range.collapse(false)
+                                        range.selectNodeContents(targetLine)
+                                        // If this was the first line (index 0), cursor at start, otherwise at end
+                                        range.collapse(index === 0 ? true : false)
                                         selection.removeAllRanges()
                                         selection.addRange(range)
                                     }

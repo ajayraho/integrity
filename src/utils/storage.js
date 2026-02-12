@@ -70,8 +70,11 @@ export function saveTemplate(template) {
 // Update an existing template
 export function updateTemplate(templateId, updates) {
   try {
+    console.log('updateTemplate called with:', templateId, updates)
     const templates = loadTemplates()
+    console.log('Current templates:', templates)
     const index = templates.findIndex(t => t.id === templateId)
+    console.log('Template index:', index)
     
     if (index !== -1) {
       // If setting as default, remove default from others
@@ -80,9 +83,12 @@ export function updateTemplate(templateId, updates) {
       }
       
       templates[index] = { ...templates[index], ...updates }
+      console.log('Updated template:', templates[index])
       localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates))
+      console.log('Saved to localStorage')
       return true
     }
+    console.log('Template not found')
     return false
   } catch (error) {
     console.error('Error updating template:', error)
@@ -93,9 +99,13 @@ export function updateTemplate(templateId, updates) {
 // Delete a template
 export function deleteTemplate(templateId) {
   try {
+    console.log('deleteTemplate called with:', templateId)
     const templates = loadTemplates()
+    console.log('Current templates:', templates)
     const filtered = templates.filter(t => t.id !== templateId)
+    console.log('Filtered templates:', filtered)
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(filtered))
+    console.log('Saved to localStorage')
     return true
   } catch (error) {
     console.error('Error deleting template:', error)

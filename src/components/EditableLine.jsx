@@ -55,6 +55,59 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId }) {
                 e.preventDefault()
                 onDelete()
             }
+        } else if (e.key === 'ArrowUp') {
+            // Check if cursor is at the start of the line
+            const selection = window.getSelection()
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0)
+                if (range.startOffset === 0) {
+                    e.preventDefault()
+                    // Find previous line
+                    const currentLine = contentRef.current
+                    if (currentLine) {
+                        const allLines = Array.from(document.querySelectorAll('[data-line-id]'))
+                        const currentIndex = allLines.indexOf(currentLine)
+                        if (currentIndex > 0) {
+                            const prevLine = allLines[currentIndex - 1]
+                            prevLine.focus()
+                            // Move cursor to end of previous line
+                            const newRange = document.createRange()
+                            const newSelection = window.getSelection()
+                            newRange.selectNodeContents(prevLine)
+                            newRange.collapse(false)
+                            newSelection.removeAllRanges()
+                            newSelection.addRange(newRange)
+                        }
+                    }
+                }
+            }
+        } else if (e.key === 'ArrowDown') {
+            // Check if cursor is at the end of the line
+            const selection = window.getSelection()
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0)
+                const text = contentRef.current?.innerText || ''
+                if (range.startOffset === text.length) {
+                    e.preventDefault()
+                    // Find next line
+                    const currentLine = contentRef.current
+                    if (currentLine) {
+                        const allLines = Array.from(document.querySelectorAll('[data-line-id]'))
+                        const currentIndex = allLines.indexOf(currentLine)
+                        if (currentIndex < allLines.length - 1) {
+                            const nextLine = allLines[currentIndex + 1]
+                            nextLine.focus()
+                            // Move cursor to start of next line
+                            const newRange = document.createRange()
+                            const newSelection = window.getSelection()
+                            newRange.selectNodeContents(nextLine)
+                            newRange.collapse(true)
+                            newSelection.removeAllRanges()
+                            newSelection.addRange(newRange)
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import TemplateMenu from './TemplateMenu'
 
-function DateHeader({ date, dayId, lines, onApplyTemplate }) {
+function DateHeader({ date, dayId, dayDate, lines, onApplyTemplate }) {
     const [showMenu, setShowMenu] = useState(false)
 
     return (
@@ -10,30 +10,33 @@ function DateHeader({ date, dayId, lines, onApplyTemplate }) {
                 {date}
             </h2>
 
-            <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-2 hover:bg-line/30 rounded-lg transition-colors relative"
-                aria-label="More options"
-            >
-                <svg
-                    className="w-6 h-6 text-ink"
-                    fill="currentColor"
-                    viewBox="0 0 16 16"
+            <div className="relative">
+                <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="p-2 hover:bg-line/30 rounded-lg transition-colors"
+                    aria-label="More options"
                 >
-                    <circle cx="2" cy="8" r="1.5" />
-                    <circle cx="8" cy="8" r="1.5" />
-                    <circle cx="14" cy="8" r="1.5" />
-                </svg>
+                    <svg
+                        className="w-6 h-6 text-ink"
+                        fill="currentColor"
+                        viewBox="0 0 16 16"
+                    >
+                        <circle cx="2" cy="8" r="1.5" />
+                        <circle cx="8" cy="8" r="1.5" />
+                        <circle cx="14" cy="8" r="1.5" />
+                    </svg>
+                </button>
 
                 {showMenu && (
                     <TemplateMenu
                         dayId={dayId}
+                        dayDate={dayDate}
                         lines={lines}
                         onClose={() => setShowMenu(false)}
                         onApplyTemplate={onApplyTemplate}
                     />
                 )}
-            </button>
+            </div>
         </div>
     )
 }

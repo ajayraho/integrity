@@ -35,11 +35,12 @@ function TemplateEditor({ template, onClose, onSave }) {
             newLines.splice(afterIndex + 1, 0, newLine)
             return newLines
         })
+        return newLine.id
     }, [])
 
-    const updateLine = useCallback((lineId, updates) => {
+    const updateLine = useCallback((lineId, content, type) => {
         setLines(prev => prev.map(line =>
-            line.id === lineId ? { ...line, ...updates } : line
+            line.id === lineId ? { ...line, content, type } : line
         ))
     }, [])
 
@@ -93,7 +94,7 @@ function TemplateEditor({ template, onClose, onSave }) {
     }
 
     const editorContent = (
-        <div 
+        <div
             className="fixed inset-0 bg-paper z-50 flex flex-col"
             onClick={(e) => e.stopPropagation()}
         >
@@ -179,7 +180,6 @@ function TemplateEditor({ template, onClose, onSave }) {
                         #D1E5F4 32px
                     )`,
                     backgroundPosition: '0 104px',
-                    backgroundAttachment: 'fixed',
                     paddingTop: '16px'
                 }}
             >

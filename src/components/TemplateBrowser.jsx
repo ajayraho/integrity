@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { loadTemplates, deleteTemplate, updateTemplate } from '../utils/storage'
 import TemplateEditor from './TemplateEditor'
+import ConfirmDialog from './ConfirmDialog'
 
 function TemplateBrowser({ onClose, onApply }) {
     const [templates, setTemplates] = useState([])
@@ -9,6 +10,7 @@ function TemplateBrowser({ onClose, onApply }) {
     const [editingId, setEditingId] = useState(null)
     const [editName, setEditName] = useState('')
     const [editingTemplate, setEditingTemplate] = useState(null)
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
     useEffect(() => {
         setTemplates(loadTemplates())
@@ -23,13 +25,25 @@ function TemplateBrowser({ onClose, onApply }) {
     }, [])
 
     const handleDelete = (templateId) => {
-        if (confirm('Delete this template?')) {
-            deleteTemplate(templateId)
-            setTemplates(loadTemplates())
-            if (selectedTemplate?.id === templateId) {
-                setSelectedTemplate(null)
-            }
-        }
+        setConfirmDialog({
+            isOpen: true,
+            action: () => {
+                console.log('Deleting template with ID:', templateId)
+                const success = deleteTemplate(templateId)
+                console.log('Delete result:', success)
+                if (success) {
+                    const updatedTemplates = loadTemplates()
+                    console.log('Updated templates:', updatedTemplates)
+                    setTemplates(updatedTemplates)
+                    if (selectedTemplate?.id === templateId) {
+                        setSelectedTemplate(null)
+                    }
+                }
+                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+            },
+            title: 'Delete Template',
+            message: 'Are you sure you want to delete this template? This action cannot be undone.'
+        })
     }
 
     const handleSetDefault = (templateId) => {
@@ -88,17 +102,55 @@ function TemplateBrowser({ onClose, onApply }) {
             >
                 {/* Header */}
                 <div className="border-b-2 border-line p-6 bg-white">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-3">
                         <h2 className="text-2xl font-bold text-ink">📋 Templates</h2>
-                        <button
-                            onClick={onClose}
-                            className="text-ink/60 hover:text-ink text-2xl leading-none"
-                        >
-                            ×
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    const defaultTemplate = templates.find(t => t.isDefault)
+                                    if (defaultTemplate) {
+                                        setConfirmDialog({
+                                            isOpen: true,
+                                            action: () => {
+                                                const success = updateTemplate(defaultTemplate.id, { ...defaultTemplate, isDefault: false })
+                                                console.log('Clear default result:', success)
+                                                if (success) {
+                                                    const updatedTemplates = loadTemplates()
+                                                    setTemplates(updatedTemplates)
+                                                    console.log('Templates after clear default:', updatedTemplates)
+                                                }
+                                                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+                                            },
+                                            title: 'Clear Default Template',
+                                            message: 'Clear default template? New days will start with a single empty line instead of the default template.'
+                                        })
+                                    } else {
+                                        setConfirmDialog({
+                                            isOpen: true,
+                                            action: () => {
+                                                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+                                            },
+                                            title: 'No Default Template',
+                                            message: 'No default template is currently set.',
+                                            confirmText: 'OK',
+                                            showCancel: false
+                                        })
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-sm border border-line rounded-lg hover:bg-line/30 transition-colors text-ink"
+                            >
+                                🗑️ Clear Default
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="text-ink/60 hover:text-ink text-2xl leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
                     </div>
                     {templates.length === 0 && (
-                        <p className="text-sm text-ink/60 mt-2">No templates saved yet. Save your first template from a day's menu!</p>
+                        <p className="text-sm text-ink/60">No templates saved yet. Save your first template from a day's menu!</p>
                     )}
                 </div>
 
@@ -233,7 +285,22 @@ function TemplateBrowser({ onClose, onApply }) {
     )
 
     // Render using portal to document.body
-    return createPortal(modalContent, document.body)
+    return (
+        <>
+            {createPortal(modalContent, document.body)}
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.action}
+                onCancel={() => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })}
+                confirmText={confirmDialog.confirmText}
+                cancelText={confirmDialog.cancelText}
+                confirmStyle={confirmDialog.confirmStyle}
+                showCancel={confirmDialog.showCancel}
+            />
+        </>
+    )
 }
 
 export default TemplateBrowser

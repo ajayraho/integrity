@@ -1,13 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
 import { saveTemplate } from '../utils/storage'
 import TemplateBrowser from './TemplateBrowser'
+import ConfirmDialog from './ConfirmDialog'
 
-function TemplateMenu({ dayId, lines, onClose, onApplyTemplate }) {
+function TemplateMenu({ dayId, dayDate, lines, onClose, onApplyTemplate }) {
     const menuRef = useRef(null)
     const [showNameInput, setShowNameInput] = useState(false)
     const [templateName, setTemplateName] = useState('')
     const [setAsDefault, setSetAsDefault] = useState(false)
     const [showBrowser, setShowBrowser] = useState(false)
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
+
+    // Check if this day is today or in the future
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const currentDayDate = new Date(dayDate)
+    currentDayDate.setHours(0, 0, 0, 0)
+    const isTodayOrFuture = currentDayDate >= today
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -119,6 +128,35 @@ function TemplateMenu({ dayId, lines, onClose, onApplyTemplate }) {
             >
                 📋 Browse Templates
             </button>
+            {isTodayOrFuture && (
+                <button
+                    onClick={() => {
+                        console.log('Clear today button clicked')
+                        setConfirmDialog({
+                            isOpen: true,
+                            action: () => {
+                                console.log('Applying empty template')
+                                // Apply empty template (single empty line)
+                                onApplyTemplate({ lines: [{ type: 'text', content: '' }] })
+                                onClose()
+                                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+                            },
+                            title: 'Clear Today\'s Template',
+                            message: 'Clear today\'s template? This will reset all lines to a single empty line.'
+                        })
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors text-sm text-ink border-t border-line"
+                >
+                    🗑️ Clear Today's Template
+                </button>
+            )}
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.action}
+                onCancel={() => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })}
+            />
         </div>
     )
 }
