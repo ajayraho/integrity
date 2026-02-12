@@ -125,7 +125,7 @@ function TemplateBrowser({ onClose, onApply }) {
                                             action: () => {
                                                 // First, unset the current default
                                                 updateTemplate(defaultTemplate.id, { ...defaultTemplate, isDefault: false })
-                                                
+
                                                 // Then create and set an empty template as default
                                                 const emptyTemplate = {
                                                     name: '__EMPTY_DEFAULT__',
@@ -135,11 +135,11 @@ function TemplateBrowser({ onClose, onApply }) {
                                                     isHidden: true // Mark as hidden so it doesn't show in the browser
                                                 }
                                                 saveTemplate(emptyTemplate)
-                                                
+
                                                 const updatedTemplates = loadVisibleTemplates()
                                                 setTemplates(updatedTemplates)
                                                 console.log('Templates after clear default:', updatedTemplates)
-                                                
+
                                                 setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
                                             },
                                             title: 'Clear Default Template',
