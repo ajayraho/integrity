@@ -641,7 +641,7 @@ export function checkBadgeEligibility(date) {
   try {
     const earnedBadges = []
     const dayXP = getXPForDate(date)
-    const entries = loadEntries().find(e => e.date.toISOString().split('T')[0] === date)
+    const entries = loadEntries().find(e => e.id === date)
     
     // Check PRODUCTIVITY_BEAST (200+ XP in a day)
     if (dayXP >= 200) {
