@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function NavigationButton({ currentView, onViewChange, onManageHabits }) {
+function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout }) {
     const [showMenu, setShowMenu] = useState(false)
 
     const views = [
@@ -41,6 +41,19 @@ function NavigationButton({ currentView, onViewChange, onManageHabits }) {
                     >
                         <span className="text-lg">⚙️</span>
                         <span className="text-sm text-ink">Manage Habits</span>
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            if (confirm('Are you sure you want to logout?')) {
+                                onLogout()
+                                setShowMenu(false)
+                            }
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-red-50 transition-colors flex items-center gap-2 text-red-600"
+                    >
+                        <span className="text-lg">🚪</span>
+                        <span className="text-sm">Logout</span>
                     </button>
                 </div>
             )}

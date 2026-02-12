@@ -6,17 +6,44 @@ import TimelineView from './components/TimelineView'
 import GridView from './components/GridView'
 import HabitManagement from './components/HabitManagement'
 import NavigationButton from './components/NavigationButton'
+import Login from './components/Login'
 import { initializeNotifications } from './utils/notifications'
 import './App.css'
 
 function App() {
   const [currentView, setCurrentView] = useState('continuous')
   const [showHabitManagement, setShowHabitManagement] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  useEffect(() => {
+    // Check if user is already authenticated
+    const authStatus = localStorage.getItem('isAuthenticated')
+    if (authStatus === 'true') {
+      setIsAuthenticated(true)
+    }
+  }, [])
 
   useEffect(() => {
     // Initialize PWA notifications
-    initializeNotifications()
-  }, [])
+    if (isAuthenticated) {
+      initializeNotifications()
+    }
+  }, [isAuthenticated])
+
+  const handleLogin = () => {
+    setIsAuthenticated(true)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('username')
+    setIsAuthenticated(false)
+  }
+
+  // Show login if not authenticated
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />
+  }
 
   const renderView = () => {
     switch (currentView) {
@@ -47,6 +74,7 @@ function App() {
         currentView={currentView}
         onViewChange={setCurrentView}
         onManageHabits={() => setShowHabitManagement(true)}
+        onLogout={handleLogout}
       />
 
       {showHabitManagement && (
