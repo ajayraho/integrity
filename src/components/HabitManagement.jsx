@@ -5,6 +5,7 @@ import ConfirmDialog from './ConfirmDialog'
 function HabitManagement({ onClose }) {
     const [habits, setHabits] = useState([])
     const [showAddForm, setShowAddForm] = useState(false)
+    const [editingHabit, setEditingHabit] = useState(null)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
     const [newHabit, setNewHabit] = useState({
         name: '',
@@ -26,10 +27,37 @@ function HabitManagement({ onClose }) {
     const handleAddHabit = () => {
         if (!newHabit.name.trim()) return
 
-        addHabit(newHabit)
+        if (editingHabit) {
+            // Update existing habit
+            updateHabit(editingHabit.id, newHabit)
+            setEditingHabit(null)
+        } else {
+            // Add new habit
+            addHabit(newHabit)
+        }
+
         setNewHabit({ name: '', type: 'checkbox', icon: '✓', color: '#2C3E50', goal: 1, xp: 10 })
         setShowAddForm(false)
         loadHabitsData()
+    }
+
+    const handleEditHabit = (habit) => {
+        setEditingHabit(habit)
+        setNewHabit({
+            name: habit.name,
+            type: habit.type,
+            icon: habit.icon,
+            color: habit.color || '#2C3E50',
+            goal: habit.goal || 1,
+            xp: habit.xp || 10
+        })
+        setShowAddForm(true)
+    }
+
+    const handleCancelEdit = () => {
+        setEditingHabit(null)
+        setNewHabit({ name: '', type: 'checkbox', icon: '✓', color: '#2C3E50', goal: 1, xp: 10 })
+        setShowAddForm(false)
     }
 
     const handleDeleteHabit = (habitId) => {
@@ -45,7 +73,13 @@ function HabitManagement({ onClose }) {
         })
     }
 
-    const iconOptions = ['✓', '💪', '📚', '🏃', '🧘', '💧', '🍎', '😴', '📝', '🎯', '⭐', '🔥', '💼', '🎨', '🎵']
+    const iconOptions = [
+        '✓', '💪', '📚', '🏃', '🧘', '💧', '🍎', '😴', '📝', '🎯', '⭐', '🔥',
+        '💼', '🎨', '🎵', '🎮', '💻', '📱', '☕', '🍕', '🏋️', '🚴', '🏊', '⚽',
+        '🏀', '🎾', '🏐', '🎳', '🎯', '🎪', '🎭', '🎬', '📷', '📖', '✏️', '📊',
+        '💡', '🌟', '🌈', '🌸', '🌺', '🌻', '🌹', '🍀', '🌿', '🌱', '🌾', '🍃',
+        '❤️', '💚', '💙', '💜', '🧡', '💛', '🤍', '🖤', '💖', '💗', '💓', '💝'
+    ]
     const typeOptions = [
         { value: 'checkbox', label: 'Checkbox (Yes/No)' },
         { value: 'number', label: 'Number (Count)' },
@@ -78,10 +112,12 @@ function HabitManagement({ onClose }) {
                         </button>
                     )}
 
-                    {/* Add Habit Form */}
+                    {/* Add/Edit Habit Form */}
                     {showAddForm && (
                         <div className="mb-6 p-4 border-2 border-line rounded-lg bg-white">
-                            <h3 className="font-semibold text-ink mb-4">Create New Habit</h3>
+                            <h3 className="font-semibold text-ink mb-4">
+                                {editingHabit ? 'Edit Habit' : 'Create New Habit'}
+                            </h3>
 
                             <div className="space-y-4">
                                 <div>
@@ -110,13 +146,13 @@ function HabitManagement({ onClose }) {
 
                                 <div>
                                     <label className="block text-sm font-medium text-ink mb-1">Icon</label>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 border border-line rounded-lg">
                                         {iconOptions.map(icon => (
                                             <button
                                                 key={icon}
                                                 onClick={() => setNewHabit({ ...newHabit, icon })}
                                                 className={`text-2xl w-12 h-12 rounded-lg border-2 ${newHabit.icon === icon ? 'border-ink bg-line/30' : 'border-line'
-                                                    } hover:bg-line/20 transition-colors`}
+                                                    } hover:bg-line/20 transition-colors flex-shrink-0`}
                                             >
                                                 {icon}
                                             </button>
@@ -161,10 +197,10 @@ function HabitManagement({ onClose }) {
                                         onClick={handleAddHabit}
                                         className="flex-1 py-2 bg-ink text-white rounded-lg font-semibold hover:bg-ink/90 transition-colors"
                                     >
-                                        Create Habit
+                                        {editingHabit ? 'Update Habit' : 'Create Habit'}
                                     </button>
                                     <button
-                                        onClick={() => setShowAddForm(false)}
+                                        onClick={handleCancelEdit}
                                         className="px-4 py-2 border-2 border-line rounded-lg hover:bg-line/20 transition-colors"
                                     >
                                         Cancel
@@ -175,7 +211,7 @@ function HabitManagement({ onClose }) {
                     )}
 
                     {/* Habits List */}
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                         {habits.length === 0 ? (
                             <p className="text-center text-gray-500 py-8">No habits yet. Create one to get started!</p>
                         ) : (
@@ -193,6 +229,12 @@ function HabitManagement({ onClose }) {
                                             {habit.xp && ` • XP: ${habit.xp}`}
                                         </div>
                                     </div>
+                                    <button
+                                        onClick={() => handleEditHabit(habit)}
+                                        className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
+                                    >
+                                        Edit
+                                    </button>
                                     <button
                                         onClick={() => handleDeleteHabit(habit.id)}
                                         className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
