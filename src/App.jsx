@@ -24,7 +24,7 @@ function App() {
     const authStatus = localStorage.getItem('isAuthenticated')
     const username = localStorage.getItem('username')
     const password = localStorage.getItem('userPassword')
-    
+
     if (authStatus === 'true' && username && password) {
       // Re-initialize session
       initSession(username, password)

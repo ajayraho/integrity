@@ -15,7 +15,7 @@ function Login({ onLogin }) {
 
         try {
             let result
-            
+
             if (isRegisterMode) {
                 // Register new user
                 result = await registerUser(username, password)
