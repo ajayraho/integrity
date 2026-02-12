@@ -71,14 +71,19 @@ export async function loginUser(username, password) {
     try {
         const hashedPassword = hashPassword(password)
         
+        // First, get the user by username only
         const { data, error } = await supabase
             .from('users')
             .select('*')
             .eq('username', username)
-            .eq('password', hashedPassword)
             .single()
         
         if (error || !data) {
+            throw new Error('Invalid username or password')
+        }
+        
+        // Check if password matches
+        if (data.password !== hashedPassword) {
             throw new Error('Invalid username or password')
         }
         
