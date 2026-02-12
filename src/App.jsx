@@ -24,7 +24,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const { toasts, showXPGain, showXPLoss, removeToast } = useToast()
+  const { toasts, showXPGain, showXPLoss, showToast, removeToast } = useToast()
   const { badgeNotification, showBadge, hideBadge, medalNotification, showMedal, hideMedal } = useBadgesAndMedals()
 
   useEffect(() => {
@@ -114,7 +114,13 @@ function App() {
       case 'habit-tracker':
         return <HabitTrackerView />
       case 'xp-stats':
-        return <XPStatsView />
+        return <XPStatsView
+          showXPGain={showXPGain}
+          showXPLoss={showXPLoss}
+          showToast={showToast}
+          showBadge={showBadge}
+          showMedal={showMedal}
+        />
       case 'continuous':
         return <JournalView
           viewType={currentView}

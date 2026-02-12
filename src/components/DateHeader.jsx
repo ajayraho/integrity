@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import TemplateMenu from './TemplateMenu'
-import { getBadgesForDate } from '../utils/storage'
+import { getBadgesForDate, BADGE_TYPES } from '../utils/storage'
 
 // Generate consistent color based on badge name
 const getColorForBadge = (badgeName) => {
@@ -17,16 +17,6 @@ const getColorForBadge = (badgeName) => {
     }
 
     return colors[Math.abs(hash) % colors.length]
-}
-
-// Get initials from badge name
-const getInitials = (badgeName) => {
-    return badgeName
-        .split(' ')
-        .map(word => word[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
 }
 
 function DateHeader({ date, dayId, dayDate, lines, onApplyTemplate }) {
@@ -51,16 +41,15 @@ function DateHeader({ date, dayId, dayDate, lines, onApplyTemplate }) {
                     <div className="flex items-center gap-1 mr-2">
                         {badges.slice(0, 5).map((badge) => {
                             const bgColor = getColorForBadge(badge.name)
-                            const initials = getInitials(badge.name)
 
                             return (
                                 <div
                                     key={badge.id}
-                                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md hover:scale-110 transition-transform cursor-pointer"
+                                    className="w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform cursor-pointer"
                                     style={{ backgroundColor: bgColor }}
                                     title={`${badge.name} (+${badge.xpBoost} XP)`}
                                 >
-                                    {initials}
+                                    <span className="text-lg">{badge.icon}</span>
                                 </div>
                             )
                         })}

@@ -538,6 +538,66 @@ export function getAllBadges() {
 }
 
 /**
+ * Delete a badge
+ */
+export function deleteBadge(badgeId) {
+  try {
+    if (!dataCache.badges) return { success: false, error: 'No badges found' }
+    
+    const badgeIndex = dataCache.badges.findIndex(b => b.id === badgeId)
+    if (badgeIndex === -1) {
+      return { success: false, error: 'Badge not found' }
+    }
+    
+    const badge = dataCache.badges[badgeIndex]
+    
+    // Remove the badge XP
+    removeXPForSource(badgeId, badge.date)
+    
+    // Remove the badge
+    dataCache.badges.splice(badgeIndex, 1)
+    scheduleSave()
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting badge:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Update a badge's date
+ */
+export function updateBadge(badgeId, newDate) {
+  try {
+    if (!dataCache.badges) return { success: false, error: 'No badges found' }
+    
+    const badge = dataCache.badges.find(b => b.id === badgeId)
+    if (!badge) {
+      return { success: false, error: 'Badge not found' }
+    }
+    
+    // Remove XP from old date
+    removeXPForSource(badgeId, badge.date)
+    
+    // Update badge date
+    const oldDate = badge.date
+    badge.date = newDate
+    badge.timestamp = new Date().toISOString()
+    
+    // Add XP to new date
+    addXP(newDate, badge.xpBoost, 'badge', badge.id, `Badge: ${badge.name}`)
+    
+    scheduleSave()
+    
+    return { success: true, badge }
+  } catch (error) {
+    console.error('Error updating badge:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
  * Check if user is eligible for a badge based on date's data
  */
 export function checkBadgeEligibility(date) {
@@ -649,6 +709,55 @@ export function getAllMedals() {
   } catch (error) {
     console.error('Error getting all medals:', error)
     return []
+  }
+}
+
+/**
+ * Delete a medal
+ */
+export function deleteMedal(medalId) {
+  try {
+    if (!dataCache.medals) return { success: false, error: 'No medals found' }
+    
+    const medalIndex = dataCache.medals.findIndex(m => m.id === medalId)
+    if (medalIndex === -1) {
+      return { success: false, error: 'Medal not found' }
+    }
+    
+    // Remove the medal
+    dataCache.medals.splice(medalIndex, 1)
+    scheduleSave()
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting medal:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Update a medal's month/year
+ */
+export function updateMedal(medalId, newYear, newMonth) {
+  try {
+    if (!dataCache.medals) return { success: false, error: 'No medals found' }
+    
+    const medal = dataCache.medals.find(m => m.id === medalId)
+    if (!medal) {
+      return { success: false, error: 'Medal not found' }
+    }
+    
+    // Update medal month/year
+    medal.year = newYear
+    medal.month = newMonth
+    medal.timestamp = new Date().toISOString()
+    
+    scheduleSave()
+    
+    return { success: true, medal }
+  } catch (error) {
+    console.error('Error updating medal:', error)
+    return { success: false, error: error.message }
   }
 }
 
