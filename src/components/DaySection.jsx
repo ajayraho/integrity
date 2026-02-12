@@ -93,7 +93,7 @@ function DaySection({ day, onUpdate, isFirst }) {
         <div
             ref={sectionRef}
             data-day-id={day.id}
-            className="day-section snap-start min-h-screen relative pb-16"
+            className="day-section snap-start min-h-screen relative pb-16 overflow-x-auto"
             style={{
                 backgroundImage: `repeating-linear-gradient(
           transparent,
@@ -102,6 +102,8 @@ function DaySection({ day, onUpdate, isFirst }) {
           #D1E5F4 32px
         )`,
                 backgroundPosition: '0 104px',
+                backgroundAttachment: 'local',
+                backgroundSize: '100% auto',
                 paddingTop: '16px'
             }}
         >
@@ -113,7 +115,7 @@ function DaySection({ day, onUpdate, isFirst }) {
                 onApplyTemplate={applyTemplate}
             />
 
-            <div className="lines-container px-4 md:px-8 lg:px-16" style={{ paddingTop: '24px' }}>
+            <div className="lines-container px-4 md:px-8 lg:px-16 min-w-full" style={{ paddingTop: '24px' }}>
                 {lines.map((line, index) => (
                     <EditableLine
                         key={`${line.id}-${line.type}`}
