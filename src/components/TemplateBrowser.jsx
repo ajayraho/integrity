@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { loadTemplates, deleteTemplate, updateTemplate } from '../utils/storage'
+import { loadTemplates, deleteTemplate, updateTemplate, saveTemplate } from '../utils/storage'
 import TemplateEditor from './TemplateEditor'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -13,7 +13,10 @@ function TemplateBrowser({ onClose, onApply }) {
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
     useEffect(() => {
-        setTemplates(loadTemplates())
+        // Load templates and filter out hidden ones (like the empty default)
+        const allTemplates = loadTemplates()
+        const visibleTemplates = allTemplates.filter(t => !t.isHidden)
+        setTemplates(visibleTemplates)
 
         // Prevent background scroll when modal is open
         document.body.style.overflow = 'hidden'
@@ -24,6 +27,12 @@ function TemplateBrowser({ onClose, onApply }) {
         }
     }, [])
 
+    // Helper function to load only visible templates
+    const loadVisibleTemplates = () => {
+        const allTemplates = loadTemplates()
+        return allTemplates.filter(t => !t.isHidden)
+    }
+
     const handleDelete = (templateId) => {
         setConfirmDialog({
             isOpen: true,
@@ -32,7 +41,7 @@ function TemplateBrowser({ onClose, onApply }) {
                 const success = deleteTemplate(templateId)
                 console.log('Delete result:', success)
                 if (success) {
-                    const updatedTemplates = loadTemplates()
+                    const updatedTemplates = loadVisibleTemplates()
                     console.log('Updated templates:', updatedTemplates)
                     setTemplates(updatedTemplates)
                     if (selectedTemplate?.id === templateId) {
@@ -48,13 +57,13 @@ function TemplateBrowser({ onClose, onApply }) {
 
     const handleSetDefault = (templateId) => {
         updateTemplate(templateId, { isDefault: true })
-        setTemplates(loadTemplates())
+        setTemplates(loadVisibleTemplates())
     }
 
     const handleRename = (templateId) => {
         if (editName.trim()) {
             updateTemplate(templateId, { name: editName.trim() })
-            setTemplates(loadTemplates())
+            setTemplates(loadVisibleTemplates())
             setEditingId(null)
             setEditName('')
         }
@@ -70,7 +79,7 @@ function TemplateBrowser({ onClose, onApply }) {
     }
 
     const handleSaveEdit = (updatedTemplate) => {
-        setTemplates(loadTemplates())
+        setTemplates(loadVisibleTemplates())
         setSelectedTemplate(updatedTemplate)
     }
 
@@ -107,18 +116,30 @@ function TemplateBrowser({ onClose, onApply }) {
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => {
-                                    const defaultTemplate = templates.find(t => t.isDefault)
+                                    // Check all templates including hidden ones
+                                    const allTemplates = loadTemplates()
+                                    const defaultTemplate = allTemplates.find(t => t.isDefault)
                                     if (defaultTemplate) {
                                         setConfirmDialog({
                                             isOpen: true,
                                             action: () => {
-                                                const success = updateTemplate(defaultTemplate.id, { ...defaultTemplate, isDefault: false })
-                                                console.log('Clear default result:', success)
-                                                if (success) {
-                                                    const updatedTemplates = loadTemplates()
-                                                    setTemplates(updatedTemplates)
-                                                    console.log('Templates after clear default:', updatedTemplates)
+                                                // First, unset the current default
+                                                updateTemplate(defaultTemplate.id, { ...defaultTemplate, isDefault: false })
+                                                
+                                                // Then create and set an empty template as default
+                                                const emptyTemplate = {
+                                                    name: '__EMPTY_DEFAULT__',
+                                                    isDefault: true,
+                                                    lines: [{ type: 'text', content: '' }],
+                                                    createdAt: new Date().toISOString(),
+                                                    isHidden: true // Mark as hidden so it doesn't show in the browser
                                                 }
+                                                saveTemplate(emptyTemplate)
+                                                
+                                                const updatedTemplates = loadVisibleTemplates()
+                                                setTemplates(updatedTemplates)
+                                                console.log('Templates after clear default:', updatedTemplates)
+                                                
                                                 setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
                                             },
                                             title: 'Clear Default Template',

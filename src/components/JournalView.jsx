@@ -39,6 +39,11 @@ function JournalView({ viewType }) {
     }, [])
 
     useEffect(() => {
+        // Disable browser scroll restoration to prevent jumping to saved position
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual'
+        }
+
         // Load saved entries to check for existing content
         const savedEntries = loadEntries()
         const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
@@ -54,6 +59,18 @@ function JournalView({ viewType }) {
 
         // Mark that we've already positioned at today
         hasScrolledToToday.current = true
+
+        // Ensure scroll is at the top (today's entry) after mount
+        if (containerRef.current) {
+            containerRef.current.scrollTop = 0
+        }
+
+        // Cleanup: restore default scroll restoration
+        return () => {
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'auto'
+            }
+        }
     }, [createDay])
 
     // Load more past days
