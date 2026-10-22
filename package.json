@@ -10,8 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "emulators": "firebase emulators:start --project demo-integrity --only auth,firestore",
-    "deploy": "npm run build && firebase deploy --only hosting,firestore:rules",
-    "export-supabase": "node scripts/export-from-supabase.mjs"
+    "deploy": "npm run build && firebase deploy --only hosting,firestore:rules"
   },
   "dependencies": {
     "firebase": "^11.10.0",

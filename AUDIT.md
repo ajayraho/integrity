@@ -14,7 +14,7 @@ Legend: ✅ fixed · 📝 documented limitation / design choice
 | # | Issue | Status |
 |---|---|---|
 | 4 | Plain-text password in localStorage | ✅ Firebase Auth (no password stored by the app) |
-| 5 | `.env` committed (public repo) | ✅ untracked + gitignored, `.env.example` added. ⚠️ Old values are still in git history; Supabase is retired, but delete that Supabase project or rotate its keys |
+| 5 | `.env` committed (public repo) | ✅ untracked + gitignored, `.env.example` added. ⚠️ Old values are still in git history: delete the Supabase project |
 | 6 | Client-side-only auth, anon key could read/overwrite any user | ✅ Firebase Auth + `firestore.rules` (users can only touch `users/{their uid}`) |
 | 7 | Weak crypto-js key derivation | ✅ removed. E2E encryption is a later step (📝) |
 
@@ -91,8 +91,7 @@ Legend: ✅ fixed · 📝 documented limitation / design choice
 
 ## New
 - Firestore data layer with batched writes (≤500 ops per batch), debounced 1.5 s (max 10 s).
-- Backup & Import (JSON); imports the old Supabase blob format too.
-- `scripts/export-from-supabase.mjs`: decrypts and exports your old Supabase data.
+- Backup & Import (JSON).
 - Login with email/password + "Forgot password".
 
 ## Testing done

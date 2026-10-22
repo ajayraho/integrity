@@ -66,18 +66,7 @@ Writes are debounced (1.5 s, max 10 s) and committed together with `writeBatch` 
 
 Menu → **Backup & Import**:
 - **Download backup**: everything as one JSON file.
-- **Import from file**: a backup from this app, or an export from the old Supabase version. Uses batched writes.
-
-### Moving data from the old Supabase version
-
-1. Put the old values in `.env.supabase`:
-   ```
-   VITE_SUPABASE_URL=...
-   VITE_SUPABASE_ANON_KEY=...
-   VITE_ENCRYPTION_KEY=...
-   ```
-2. `node scripts/export-from-supabase.mjs <old-username> <old-password>` writes `integrity-supabase-export.json`.
-3. Sign in to the new app → Backup & Import → Import from file.
+- **Import from file**: a backup from this app. Uses batched writes.
 
 ## Known limitations
 

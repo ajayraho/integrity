@@ -54,7 +54,7 @@ function BackupModal({ onClose }) {
                         <button onClick={() => fileRef.current?.click()} disabled={busy} className="w-full py-3 border-2 border-ink rounded-lg font-medium disabled:opacity-50">
                             ⬆️ Import from file
                         </button>
-                        <p className="text-xs text-ink/60 mt-1">Accepts a backup from this app or an export from the old (Supabase) version. Items with the same id are overwritten.</p>
+                        <p className="text-xs text-ink/60 mt-1">Accepts a backup file from this app. Items with the same id are overwritten.</p>
                         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleImport} />
                     </div>
                     {message && <p className="text-sm bg-white border border-line rounded-lg p-3">{message}</p>}

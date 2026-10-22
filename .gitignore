@@ -31,4 +31,3 @@ dev-dist
 .firebase
 firebase-debug.log
 firestore-debug.log
-integrity-supabase-export.json
