@@ -1,13 +1,5 @@
-import { useState, useEffect } from 'react'
-
 function JumpToTodayButton({ onJumpToToday, isVisible }) {
-    const [show, setShow] = useState(false)
-
-    useEffect(() => {
-        setShow(isVisible)
-    }, [isVisible])
-
-    if (!show) return null
+    if (!isVisible) return null
 
     return (
         <button

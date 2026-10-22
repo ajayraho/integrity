@@ -1,31 +1,35 @@
 import { useState, useCallback } from 'react'
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
+
+/** Queues unlock animations so several rewards at once are shown one after another. */
 export function useBadgesAndMedals() {
-    const [badgeNotification, setBadgeNotification] = useState(null)
-    const [medalNotification, setMedalNotification] = useState(null)
+    const [badgeQueue, setBadgeQueue] = useState([])
+    const [medalQueue, setMedalQueue] = useState([])
 
     const showBadge = useCallback((badge) => {
-        setBadgeNotification(badge)
+        if (badge) setBadgeQueue(q => [...q, badge])
     }, [])
 
     const hideBadge = useCallback(() => {
-        setBadgeNotification(null)
+        setBadgeQueue(q => q.slice(1))
     }, [])
 
-    const showMedal = useCallback((medal, monthName) => {
-        setMedalNotification({ medal, monthName })
+    const showMedal = useCallback((medal) => {
+        if (medal) setMedalQueue(q => [...q, { medal, monthName: MONTHS[(medal.month || 1) - 1] }])
     }, [])
 
     const hideMedal = useCallback(() => {
-        setMedalNotification(null)
+        setMedalQueue(q => q.slice(1))
     }, [])
 
     return {
-        badgeNotification,
+        badgeNotification: badgeQueue[0] || null,
         showBadge,
         hideBadge,
-        medalNotification,
+        medalNotification: medalQueue[0] || null,
         showMedal,
-        hideMedal
+        hideMedal,
     }
 }

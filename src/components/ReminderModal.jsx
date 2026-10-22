@@ -1,42 +1,23 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { addReminder, updateReminder, deleteReminder, getRemindersForLine } from '../utils/storage'
 import { NotificationService } from '../utils/notifications'
+import { toLocalInputValue } from '../utils/date'
 
 function ReminderModal({ lineId, dayId, lineContent, onClose, onSave }) {
-    const [datetime, setDatetime] = useState('')
-    const [recurring, setRecurring] = useState('none')
-    const [customDays, setCustomDays] = useState([])
-    const [existingReminder, setExistingReminder] = useState(null)
-    const [showNotificationPermission, setShowNotificationPermission] = useState(false)
-
-    useEffect(() => {
-        // Check if line already has a reminder
-        const reminders = getRemindersForLine(lineId)
-        if (reminders.length > 0) {
-            const reminder = reminders[0]
-            setExistingReminder(reminder)
-
-            // Format datetime for input
-            const dt = new Date(reminder.datetime)
-            const formattedDt = dt.toISOString().slice(0, 16)
-            setDatetime(formattedDt)
-            setRecurring(reminder.recurring)
-            if (reminder.customRecurring) {
-                setCustomDays(reminder.customRecurring)
-            }
-        } else {
-            // Default to tomorrow at 9 AM
-            const tomorrow = new Date()
-            tomorrow.setDate(tomorrow.getDate() + 1)
-            tomorrow.setHours(9, 0, 0, 0)
-            setDatetime(tomorrow.toISOString().slice(0, 16))
-        }
-
-        // Check notification permission
-        if ('Notification' in window && Notification.permission === 'default') {
-            setShowNotificationPermission(true)
-        }
-    }, [lineId])
+    // Read existing reminder once when the modal opens
+    const [existingReminder] = useState(() => getRemindersForLine(lineId)[0] || null)
+    const [datetime, setDatetime] = useState(() => {
+        if (existingReminder) return toLocalInputValue(existingReminder.datetime) // local time
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        tomorrow.setHours(9, 0, 0, 0)
+        return toLocalInputValue(tomorrow)
+    })
+    const [recurring, setRecurring] = useState(existingReminder?.recurring || 'none')
+    const [customDays, setCustomDays] = useState(existingReminder?.customRecurring || [])
+    const [showNotificationPermission, setShowNotificationPermission] = useState(
+        () => 'Notification' in window && Notification.permission === 'default'
+    )
 
     const handleRequestPermission = async () => {
         if ('Notification' in window) {
@@ -48,28 +29,22 @@ function ReminderModal({ lineId, dayId, lineContent, onClose, onSave }) {
     }
 
     const handleSave = async () => {
+        const when = new Date(datetime) // parsed as local time
+        if (isNaN(when)) return
         const reminderData = {
             lineId,
             dayId,
             lineContent,
-            datetime: new Date(datetime),
+            datetime: when,
             recurring,
-            customRecurring: recurring === 'custom' ? customDays : null
+            customRecurring: recurring === 'custom' ? customDays : null,
+            enabled: true,
         }
 
-        let savedReminder
-        if (existingReminder) {
-            updateReminder(existingReminder.id, reminderData)
-            savedReminder = { ...existingReminder, ...reminderData }
-        } else {
-            savedReminder = addReminder(reminderData)
-        }
+        if (existingReminder) updateReminder(existingReminder.id, reminderData)
+        else addReminder(reminderData)
 
-        // Schedule PWA notification
-        if (savedReminder) {
-            await NotificationService.scheduleReminder(savedReminder)
-        }
-
+        await NotificationService.requestPermission()
         if (onSave) onSave()
         onClose()
     }
@@ -77,7 +52,6 @@ function ReminderModal({ lineId, dayId, lineContent, onClose, onSave }) {
     const handleDelete = () => {
         if (existingReminder) {
             deleteReminder(existingReminder.id)
-            NotificationService.cancelReminder(existingReminder.id)
             if (onSave) onSave()
         }
         onClose()
@@ -102,8 +76,8 @@ function ReminderModal({ lineId, dayId, lineContent, onClose, onSave }) {
     ]
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white border-2 border-line rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white border-2 border-line rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="sticky top-0 bg-white border-b-2 border-line p-4 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-ink">
@@ -161,6 +135,8 @@ function ReminderModal({ lineId, dayId, lineContent, onClose, onSave }) {
                             className="w-full px-4 py-2 border-2 border-line rounded-lg bg-white text-ink focus:border-ink outline-none"
                         />
                     </div>
+
+                    <p className="text-xs text-ink/60 -mt-4">Reminders fire while Integrity is open (or when you next open it, up to 12h late).</p>
 
                     {/* Recurring Options */}
                     <div>

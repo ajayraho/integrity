@@ -1,15 +1,12 @@
-import { useState, useEffect } from 'react'
-import { loadEntries } from '../utils/storage'
+import { useState } from 'react'
+import { getDay, dayHasContent } from '../utils/storage'
+import { useStoreVersion } from '../hooks/useStore'
+import { toDateId, addMonths } from '../utils/date'
 
-function GridView() {
-    const [entries, setEntries] = useState([])
+function GridView({ onOpenDay }) {
+    useStoreVersion()
     const [viewMode, setViewMode] = useState('week') // week, month
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 8)) // Feb 8, 2026
-
-    useEffect(() => {
-        const allEntries = loadEntries()
-        setEntries(allEntries)
-    }, [])
+    const [currentDate, setCurrentDate] = useState(() => new Date())
 
     const getWeekDays = (date) => {
         const days = []
@@ -52,14 +49,11 @@ function GridView() {
 
     const getEntryForDate = (date) => {
         if (!date) return null
-        const dateStr = date.toISOString().split('T')[0]
-        return entries.find(entry => entry.id === dateStr)
+        return getDay(toDateId(date))
     }
 
     const hasContent = (entry) => {
-        if (!entry) return false
-        return entry.lines.some(line => line.content.trim() !== '') ||
-            Object.keys(entry.habits || {}).length > 0
+        return dayHasContent(entry)
     }
 
     const previousPeriod = () => {
@@ -67,7 +61,8 @@ function GridView() {
         if (viewMode === 'week') {
             newDate.setDate(newDate.getDate() - 7)
         } else {
-            newDate.setMonth(newDate.getMonth() - 1)
+            setCurrentDate(addMonths(currentDate, -1))
+            return
         }
         setCurrentDate(newDate)
     }
@@ -77,7 +72,8 @@ function GridView() {
         if (viewMode === 'week') {
             newDate.setDate(newDate.getDate() + 7)
         } else {
-            newDate.setMonth(newDate.getMonth() + 1)
+            setCurrentDate(addMonths(currentDate, 1))
+            return
         }
         setCurrentDate(newDate)
     }
@@ -97,7 +93,7 @@ function GridView() {
 
     const isToday = (date) => {
         if (!date) return false
-        const today = new Date(2026, 1, 8) // Feb 8, 2026
+        const today = new Date()
         return date.toDateString() === today.toDateString()
     }
 
@@ -174,9 +170,10 @@ function GridView() {
 
                             return (
                                 <div
-                                    key={date.toISOString()}
+                                    key={toDateId(date)}
+                                    onClick={() => onOpenDay?.(toDateId(date))}
                                     className={`
-                                        border-2 rounded-lg p-3 transition-all
+                                        border-2 rounded-lg p-2 sm:p-3 transition-all cursor-pointer min-w-0
                                         ${today ? 'border-ink bg-ink/5' : 'border-line'}
                                         ${hasData ? 'bg-white hover:shadow-md' : 'bg-gray-50'}
                                     `}
@@ -194,7 +191,7 @@ function GridView() {
                                     {entry && hasData && (
                                         <div className="space-y-1 text-xs text-ink/70 overflow-hidden">
                                             {entry.lines
-                                                .filter(line => line.content.trim() !== '')
+                                                .filter(line => (line.content || '').trim() !== '')
                                                 .slice(0, viewMode === 'week' ? 4 : 2)
                                                 .map(line => (
                                                     <div
@@ -206,15 +203,15 @@ function GridView() {
                                                         <span className="flex-1 truncate">{line.content}</span>
                                                     </div>
                                                 ))}
-                                            {entry.lines.filter(line => line.content.trim() !== '').length > (viewMode === 'week' ? 4 : 2) && (
+                                            {entry.lines.filter(line => (line.content || '').trim() !== '').length > (viewMode === 'week' ? 4 : 2) && (
                                                 <div className="text-ink/50 italic">
-                                                    +{entry.lines.filter(line => line.content.trim() !== '').length - (viewMode === 'week' ? 4 : 2)} more
+                                                    +{entry.lines.filter(line => (line.content || '').trim() !== '').length - (viewMode === 'week' ? 4 : 2)} more
                                                 </div>
                                             )}
-                                            {Object.keys(entry.habits || {}).filter(k => entry.habits[k]).length > 0 && (
+                                            {Object.keys(entry.habits || {}).filter(k => entry.habits[k] !== '' && entry.habits[k] !== false && entry.habits[k] != null).length > 0 && (
                                                 <div className="flex gap-1 mt-2 flex-wrap">
                                                     {Object.keys(entry.habits || {})
-                                                        .filter(k => entry.habits[k])
+                                                        .filter(k => entry.habits[k] !== '' && entry.habits[k] !== false && entry.habits[k] != null)
                                                         .slice(0, 3)
                                                         .map(k => (
                                                             <div key={k} className="w-1.5 h-1.5 rounded-full bg-green-500" />

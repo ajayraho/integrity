@@ -1,19 +1,20 @@
 {
   "name": "integrity",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "Integrity - Your Personal Continuous Journal",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "emulators": "firebase emulators:start --project demo-integrity --only auth,firestore",
+    "deploy": "npm run build && firebase deploy --only hosting,firestore:rules",
+    "export-supabase": "node scripts/export-from-supabase.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.95.3",
-    "crypto-js": "^4.2.0",
-    "firebase-tools": "^15.5.1",
+    "firebase": "^11.10.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -27,6 +28,7 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "firebase-tools": "^14.27.0",
     "globals": "^16.5.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",

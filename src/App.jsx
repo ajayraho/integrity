@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import JournalView from './components/JournalView'
 import HabitTrackerView from './components/HabitTrackerView'
 import CalendarView from './components/CalendarView'
@@ -8,187 +8,200 @@ import XPStatsView from './components/XPStatsView'
 import HabitManagement from './components/HabitManagement'
 import NavigationButton from './components/NavigationButton'
 import Login from './components/Login'
-import Toast from './components/Toast'
+import { ToastStack } from './components/Toast'
+import SaveStatus from './components/SaveStatus'
+import BackupModal from './components/BackupModal'
 import BadgeUnlockNotification from './components/BadgeUnlockNotification'
 import MedalUnlockNotification from './components/MedalUnlockNotification'
 import { useToast } from './hooks/useToast'
 import { useBadgesAndMedals } from './hooks/useBadgesAndMedals'
-import { initializeNotifications } from './utils/notifications'
-import { initSession, clearSession } from './utils/database'
-import { initializeStorage } from './utils/storage'
+import { FeedbackContext } from './hooks/useFeedback'
+import { startReminderScheduler } from './utils/notifications'
+import { watchAuth, logout } from './utils/auth'
+import { initStore, teardownStore, flush, checkRewards } from './utils/storage'
+import { firebaseConfigured } from './utils/firebase'
 import './App.css'
 
 function App() {
-  const [currentView, setCurrentView] = useState('continuous')
-  const [showHabitManagement, setShowHabitManagement] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const { toasts, showXPGain, showXPLoss, showToast, removeToast } = useToast()
-  const { badgeNotification, showBadge, hideBadge, medalNotification, showMedal, hideMedal } = useBadgesAndMedals()
+    const [currentView, setCurrentView] = useState('continuous')
+    const [focusDayId, setFocusDayId] = useState(null)
+    const [showHabitManagement, setShowHabitManagement] = useState(false)
+    const [showBackup, setShowBackup] = useState(false)
+    const [user, setUser] = useState(undefined) // undefined = still checking
+    const [readyUid, setReadyUid] = useState(null)
+    const [loadError, setLoadError] = useState('')
+    const [retryKey, setRetryKey] = useState(0)
+    const { toasts, showXPGain, showXPLoss, showToast, removeToast } = useToast()
+    const { badgeNotification, showBadge, hideBadge, medalNotification, showMedal, hideMedal } = useBadgesAndMedals()
 
-  useEffect(() => {
-    // Check if user is already authenticated
-    const authStatus = localStorage.getItem('isAuthenticated')
-    const username = localStorage.getItem('username')
-    const password = localStorage.getItem('userPassword')
+    useEffect(() => watchAuth(u => setUser(u || null)), [])
 
-    if (authStatus === 'true' && username && password) {
-      // Re-initialize session
-      initSession(username, password)
-      initializeStorage().then((result) => {
-        if (result.success) {
-          setIsAuthenticated(true)
-        } else {
-          setLoadError('Failed to load data. Please login again.')
-          localStorage.clear()
+    const ready = Boolean(user && readyUid === user.uid)
+
+    useEffect(() => {
+        if (!user) {
+            teardownStore()
+            return
         }
-        setIsLoading(false)
-      })
-    } else {
-      setIsLoading(false)
+        let cancelled = false
+        initStore(user.uid)
+            .then(() => {
+                if (!cancelled) {
+                    setLoadError('')
+                    setReadyUid(user.uid)
+                }
+            })
+            .catch(err => {
+                if (!cancelled) setLoadError('Could not load your data: ' + (err.code || err.message))
+            })
+        return () => { cancelled = true }
+    }, [user, retryKey])
+
+    useEffect(() => {
+        if (!ready) return
+        return startReminderScheduler()
+    }, [ready])
+
+    const handleLogout = async () => {
+        await flush()
+        teardownStore()
+        await logout()
+        setReadyUid(null)
+        setFocusDayId(null)
+        setCurrentView('continuous')
     }
-  }, [])
 
-  useEffect(() => {
-    // Initialize PWA notifications
-    if (isAuthenticated) {
-      initializeNotifications()
-    }
-  }, [isAuthenticated])
+    const celebrate = useCallback((xpDelta, dateId) => {
+        if (xpDelta > 0) {
+            showXPGain(xpDelta)
+            if (dateId) {
+                const { badges, medal } = checkRewards(dateId)
+                badges.forEach(showBadge)
+                if (medal) showMedal(medal)
+            }
+        } else if (xpDelta < 0) {
+            showXPLoss(xpDelta)
+        }
+    }, [showXPGain, showXPLoss, showBadge, showMedal])
 
-  const handleLogin = async (username, password) => {
-    setIsLoading(true)
-    try {
-      // Initialize storage with user data
-      const result = await initializeStorage()
-      if (result.success) {
-        // Store password temporarily (in production, use more secure method)
-        localStorage.setItem('userPassword', password)
-        setIsAuthenticated(true)
-        setLoadError('')
-      } else {
-        setLoadError('Failed to load user data')
-      }
-    } catch (error) {
-      setLoadError('Error loading data: ' + error.message)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    const feedback = useMemo(() => ({
+        showToast, showXPGain, showXPLoss, showBadge, showMedal, celebrate,
+    }), [showToast, showXPGain, showXPLoss, showBadge, showMedal, celebrate])
 
-  const handleLogout = () => {
-    clearSession()
-    localStorage.clear()
-    setIsAuthenticated(false)
-  }
+    const openDay = useCallback((dayId) => {
+        setFocusDayId(dayId)
+        setCurrentView('continuous')
+    }, [])
 
-  // Show loading screen
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 bg-paper flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">📔</div>
-          <div className="text-ink font-medium">Loading your data...</div>
-        </div>
-      </div>
-    )
-  }
+    const goToView = useCallback((view) => {
+        if (view === 'continuous') setFocusDayId(null)
+        setCurrentView(view)
+    }, [])
 
-  // Show login if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <>
-        <Login onLogin={handleLogin} />
-        {loadError && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-50 border-2 border-red-300 text-red-700 px-6 py-3 rounded-lg shadow-lg z-50">
-            {loadError}
-          </div>
-        )}
-      </>
-    )
-  }
-
-  const renderView = () => {
-    switch (currentView) {
-      case 'habit-tracker':
-        return <HabitTrackerView />
-      case 'xp-stats':
-        return <XPStatsView
-          showXPGain={showXPGain}
-          showXPLoss={showXPLoss}
-          showToast={showToast}
-          showBadge={showBadge}
-          showMedal={showMedal}
-        />
-      case 'continuous':
-        return <JournalView
-          viewType={currentView}
-          showXPGain={showXPGain}
-          showXPLoss={showXPLoss}
-          showBadge={showBadge}
-          showMedal={showMedal}
-        />
-      case 'calendar':
-        return <CalendarView />
-      case 'timeline':
-        return <TimelineView />
-      case 'grid':
-        return <GridView />
-      default:
+    if (!firebaseConfigured) {
         return (
-          <div className="flex items-center justify-center h-screen text-gray-500">
-            <p className="text-lg">This view is coming soon...</p>
-          </div>
+            <div className="fixed inset-0 bg-paper flex items-center justify-center p-6 text-center text-ink">
+                <div>
+                    <div className="text-4xl mb-4">⚙️</div>
+                    <p className="font-medium">Firebase isn't configured.</p>
+                    <p className="text-sm text-ink/60 mt-2">Copy <code>.env.example</code> to <code>.env</code> and fill in your Firebase web app config.</p>
+                </div>
+            </div>
         )
     }
-  }
 
-  return (
-    <div className="app min-h-screen bg-paper">
-      {renderView()}
+    if (user === undefined || (user && !ready && !loadError)) {
+        return (
+            <div className="fixed inset-0 bg-paper flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-4xl mb-4">📔</div>
+                    <div className="text-ink font-medium">Loading your data...</div>
+                </div>
+            </div>
+        )
+    }
 
-      <NavigationButton
-        currentView={currentView}
-        onViewChange={setCurrentView}
-        onManageHabits={() => setShowHabitManagement(true)}
-        onLogout={handleLogout}
-      />
+    if (!user) return <Login />
 
-      {showHabitManagement && (
-        <HabitManagement onClose={() => setShowHabitManagement(false)} />
-      )}
+    if (loadError) {
+        return (
+            <div className="fixed inset-0 bg-paper flex items-center justify-center p-6">
+                <div className="text-center max-w-sm">
+                    <div className="text-4xl mb-4">⚠️</div>
+                    <p className="text-ink font-medium mb-4">{loadError}</p>
+                    <div className="flex gap-3 justify-center">
+                        <button onClick={() => { setLoadError(''); setRetryKey(k => k + 1) }} className="px-4 py-2 bg-ink text-white rounded-lg">Retry</button>
+                        <button onClick={handleLogout} className="px-4 py-2 border-2 border-line rounded-lg">Logout</button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
-      {/* Toast notifications */}
-      {toasts.map((toast, index) => (
-        <div key={toast.id} style={{ position: 'fixed', top: `${24 + index * 80}px`, left: '50%', transform: 'translateX(-50%)', zIndex: 200 }}>
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            duration={toast.duration || 3000}
-            onClose={() => removeToast(toast.id)}
-          />
-        </div>
-      ))}
+    const renderView = () => {
+        switch (currentView) {
+            case 'habit-tracker':
+                return <HabitTrackerView />
+            case 'xp-stats':
+                return <XPStatsView />
+            case 'calendar':
+                return <CalendarView onOpenDay={openDay} />
+            case 'timeline':
+                return <TimelineView onOpenDay={openDay} />
+            case 'grid':
+                return <GridView onOpenDay={openDay} />
+            case 'continuous':
+            default:
+                // Remount when asked to open a specific day
+                return <JournalView key={focusDayId || 'today'} initialDayId={focusDayId} />
+        }
+    }
 
-      {/* Badge notification */}
-      {badgeNotification && (
-        <BadgeUnlockNotification
-          badge={badgeNotification}
-          onClose={hideBadge}
-        />
-      )}
+    return (
+        <FeedbackContext.Provider value={feedback}>
+            <div className="app min-h-screen bg-paper">
+                {renderView()}
 
-      {/* Medal notification */}
-      {medalNotification && (
-        <MedalUnlockNotification
-          medal={medalNotification.medal}
-          monthName={medalNotification.monthName}
-          onClose={hideMedal}
-        />
-      )}
-    </div>
-  )
+                <SaveStatus />
+
+                <NavigationButton
+                    currentView={currentView}
+                    onViewChange={goToView}
+                    onManageHabits={() => setShowHabitManagement(true)}
+                    onBackup={() => setShowBackup(true)}
+                    onLogout={handleLogout}
+                    userEmail={user.email}
+                />
+
+                {showHabitManagement && (
+                    <HabitManagement onClose={() => setShowHabitManagement(false)} />
+                )}
+
+                {showBackup && (
+                    <BackupModal onClose={() => setShowBackup(false)} />
+                )}
+
+                <ToastStack toasts={toasts} removeToast={removeToast} />
+
+                {badgeNotification && (
+                    <BadgeUnlockNotification
+                        key={badgeNotification.id}
+                        badge={badgeNotification}
+                        onClose={hideBadge}
+                    />
+                )}
+
+                {medalNotification && (
+                    <MedalUnlockNotification
+                        key={medalNotification.medal.id}
+                        medal={medalNotification.medal}
+                        monthName={medalNotification.monthName}
+                        onClose={hideMedal}
+                    />
+                )}
+            </div>
+        </FeedbackContext.Provider>
+    )
 }
 
 export default App

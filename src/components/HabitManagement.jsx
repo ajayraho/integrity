@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { loadHabits, addHabit, updateHabit, deleteHabit } from '../utils/storage'
+import { useStoreVersion } from '../hooks/useStore'
 import ConfirmDialog from './ConfirmDialog'
 
 function HabitManagement({ onClose }) {
-    const [habits, setHabits] = useState([])
+    useStoreVersion()
+    const habits = loadHabits()
     const [showAddForm, setShowAddForm] = useState(false)
     const [editingHabit, setEditingHabit] = useState(null)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
@@ -15,14 +17,6 @@ function HabitManagement({ onClose }) {
         goal: 1,
         xp: 10
     })
-
-    useEffect(() => {
-        loadHabitsData()
-    }, [])
-
-    const loadHabitsData = () => {
-        setHabits(loadHabits().sort((a, b) => a.order - b.order))
-    }
 
     const handleAddHabit = () => {
         if (!newHabit.name.trim()) return
@@ -38,7 +32,6 @@ function HabitManagement({ onClose }) {
 
         setNewHabit({ name: '', type: 'checkbox', icon: '✓', color: '#2C3E50', goal: 1, xp: 10 })
         setShowAddForm(false)
-        loadHabitsData()
     }
 
     const handleEditHabit = (habit) => {
@@ -65,11 +58,10 @@ function HabitManagement({ onClose }) {
             isOpen: true,
             action: () => {
                 deleteHabit(habitId)
-                loadHabitsData()
                 setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
             },
             title: 'Delete Habit',
-            message: 'Are you sure you want to delete this habit? This action cannot be undone.'
+            message: 'Delete this habit? It will disappear from your days. Values and XP already recorded on past days are kept.'
         })
     }
 
@@ -226,7 +218,7 @@ function HabitManagement({ onClose }) {
                                         <div className="text-sm text-gray-600">
                                             Type: {typeOptions.find(t => t.value === habit.type)?.label}
                                             {habit.type === 'number' && habit.goal && ` • Goal: ${habit.goal}`}
-                                            {habit.xp && ` • XP: ${habit.xp}`}
+                                            {habit.xp > 0 && ` • XP: ${habit.xp}`}
                                         </div>
                                     </div>
                                     <button

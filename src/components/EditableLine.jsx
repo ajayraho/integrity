@@ -1,158 +1,127 @@
 import { useRef, useEffect, useState } from 'react'
 import LineTypeMenu from './LineTypeMenu'
 import ReminderModal from './ReminderModal'
-import XPPromptModal from './XPPromptModal'
-import { getRemindersForLine, addXP, removeXPForSource, getXPForSource } from '../utils/storage'
 
-function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onXPChange }) {
+import { focusLine } from '../utils/focus'
+
+const LINE_STYLE = {
+    minHeight: '32px',
+    lineHeight: '32px',
+    fontSize: '18px',
+}
+
+/** Caret offset (in characters) from the start of `el`, or -1. */
+function caretOffset(el) {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return -1
+    const range = sel.getRangeAt(0)
+    if (!el.contains(range.startContainer)) return -1
+    const pre = range.cloneRange()
+    pre.selectNodeContents(el)
+    pre.setEnd(range.startContainer, range.startOffset)
+    return pre.toString().length
+}
+
+function moveToSibling(current, direction) {
+    const all = Array.from(document.querySelectorAll('[data-line-id]'))
+    const idx = all.indexOf(current)
+    const target = all[idx + direction]
+    if (!target) return false
+    target.focus()
+    const range = document.createRange()
+    range.selectNodeContents(target)
+    range.collapse(direction > 0) // down: caret at start, up: caret at end
+    const sel = window.getSelection()
+    sel.removeAllRanges()
+    sel.addRange(range)
+    return true
+}
+
+/**
+ * One journal line.
+ * Props:
+ *   line                {id, type, content, checked, xp, timeStart, timeEnd, selected}
+ *   onChange(patch)     merge fields into the line
+ *   onEnter()           create a line below
+ *   onDelete()          remove this (empty) line
+ *   onToggleCheck(bool) checkbox clicked (parent handles XP prompt)
+ *   onSelectRadio()     radio clicked
+ *   onTypeChange(type)
+ *   reminders           reminders for this line (omit to disable reminders, e.g. templates)
+ *   dayId
+ *   mode                'journal' | 'template'
+ */
+function EditableLine({
+    line, onChange, onEnter, onDelete, onToggleCheck, onSelectRadio, onTypeChange,
+    reminders, dayId, autoFocus, mode = 'journal',
+}) {
     const contentRef = useRef(null)
     const [showTypeMenu, setShowTypeMenu] = useState(false)
     const [showReminderModal, setShowReminderModal] = useState(false)
-    const [showXPPrompt, setShowXPPrompt] = useState(false)
-    const [hasReminder, setHasReminder] = useState(false)
-    const [isChecked, setIsChecked] = useState(line.checked || false)
-    const [lineXP, setLineXP] = useState(line.xp || 0)
+    const isTemplate = mode === 'template'
+    const hasReminder = !isTemplate && (reminders || []).some(r => r.enabled !== false)
 
     useEffect(() => {
-        if (autoFocus && contentRef.current) {
-            contentRef.current.focus()
-        }
+        if (autoFocus && contentRef.current) contentRef.current.focus()
     }, [autoFocus])
 
+    // Keep the DOM text in sync with data (remote edits, template apply, type change).
+    // While typing, data already equals the DOM text, so the caret isn't disturbed.
     useEffect(() => {
-        if (contentRef.current) {
-            // Always set the inner text to match the line content
-            // This ensures the contentEditable div shows the correct content
-            if (line.content !== contentRef.current.innerText) {
-                contentRef.current.innerText = line.content
-            }
-        }
+        const el = contentRef.current
+        if (!el) return
+        const content = line.content || ''
+        if (el.innerText.replace(/\n$/, '') !== content) el.innerText = content
     }, [line.content, line.type])
 
-    useEffect(() => {
-        // Check if line has a reminder
-        const reminders = getRemindersForLine(line.id)
-        setHasReminder(reminders.length > 0)
-    }, [line.id])
-
-    useEffect(() => {
-        setIsChecked(line.checked || false)
-        setLineXP(line.xp || 0)
-    }, [line.checked, line.xp])
-
-    const checkForReminder = () => {
-        const reminders = getRemindersForLine(line.id)
-        setHasReminder(reminders.length > 0)
-    }
-
-    const handleCheckboxChange = (checked) => {
-        if ((line.type === 'checkbox' || line.type === 'checkbox-time') && checked && !isChecked) {
-            // Checking a box - prompt for XP
-            setShowXPPrompt(true)
-        } else if (!checked && isChecked) {
-            // Unchecking - deduct XP
-            const removedXP = removeXPForSource(line.id, dayId)
-            if (removedXP > 0) {
-                onXPChange?.(-removedXP, 'loss')
-            }
-            setIsChecked(false)
-            setLineXP(0)
-            onUpdate(line.id, contentRef.current.innerText, line.type, false, 0)
-        }
-    }
-
-    const handleXPConfirm = (xp) => {
-        setShowXPPrompt(false)
-        setIsChecked(true)
-        setLineXP(xp)
-
-        // Add XP to history
-        const taskName = contentRef.current.innerText.trim() || 'Task'
-        addXP(dayId, xp, 'task', line.id, taskName)
-        onXPChange?.(xp, 'gain')
-
-        // Update line with checked and XP data
-        onUpdate(line.id, contentRef.current.innerText, line.type, true, xp)
-    }
-
     const handleKeyDown = (e) => {
+        const el = contentRef.current
+        if (!el) return
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
-            const newLineId = onEnter()
-            // Focus the new line after a short delay
-            setTimeout(() => {
-                const newLine = document.querySelector(`[data-line-id="${newLineId}"]`)
-                if (newLine) newLine.focus()
-            }, 0)
+            onEnter?.()
         } else if (e.key === 'Backspace') {
-            // Get the current text content
-            const text = contentRef.current?.innerText || contentRef.current?.textContent || ''
-            const trimmedText = text.trim()
-
-            // Only delete if the line is completely empty
-            if (trimmedText === '') {
+            if ((el.innerText || '').trim() === '' && caretOffset(el) <= 0) {
                 e.preventDefault()
-                onDelete()
+                onDelete?.()
             }
         } else if (e.key === 'ArrowUp') {
-            // Check if cursor is at the start of the line
-            const selection = window.getSelection()
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0)
-                if (range.startOffset === 0) {
-                    e.preventDefault()
-                    // Find previous line
-                    const currentLine = contentRef.current
-                    if (currentLine) {
-                        const allLines = Array.from(document.querySelectorAll('[data-line-id]'))
-                        const currentIndex = allLines.indexOf(currentLine)
-                        if (currentIndex > 0) {
-                            const prevLine = allLines[currentIndex - 1]
-                            prevLine.focus()
-                            // Move cursor to end of previous line
-                            const newRange = document.createRange()
-                            const newSelection = window.getSelection()
-                            newRange.selectNodeContents(prevLine)
-                            newRange.collapse(false)
-                            newSelection.removeAllRanges()
-                            newSelection.addRange(newRange)
-                        }
-                    }
-                }
-            }
+            if (caretOffset(el) === 0 && moveToSibling(el, -1)) e.preventDefault()
         } else if (e.key === 'ArrowDown') {
-            // Check if cursor is at the end of the line
-            const selection = window.getSelection()
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0)
-                const text = contentRef.current?.innerText || ''
-                if (range.startOffset === text.length) {
-                    e.preventDefault()
-                    // Find next line
-                    const currentLine = contentRef.current
-                    if (currentLine) {
-                        const allLines = Array.from(document.querySelectorAll('[data-line-id]'))
-                        const currentIndex = allLines.indexOf(currentLine)
-                        if (currentIndex < allLines.length - 1) {
-                            const nextLine = allLines[currentIndex + 1]
-                            nextLine.focus()
-                            // Move cursor to start of next line
-                            const newRange = document.createRange()
-                            const newSelection = window.getSelection()
-                            newRange.selectNodeContents(nextLine)
-                            newRange.collapse(true)
-                            newSelection.removeAllRanges()
-                            newSelection.addRange(newRange)
-                        }
-                    }
-                }
-            }
+            if (caretOffset(el) === (el.innerText || '').replace(/\n$/, '').length && moveToSibling(el, 1)) e.preventDefault()
         }
     }
 
     const handleInput = (e) => {
-        onUpdate(line.id, e.target.innerText, line.type)
+        onChange({ content: e.currentTarget.innerText.replace(/\n$/, '') })
     }
+
+    // Paste as plain text (no fonts/colours from other apps)
+    const handlePaste = (e) => {
+        e.preventDefault()
+        const text = (e.clipboardData?.getData('text/plain') || '').replace(/\r?\n/g, ' ')
+        document.execCommand('insertText', false, text)
+    }
+
+    const editable = (placeholder, extraClass = '') => (
+        <div
+            ref={contentRef}
+            contentEditable
+            suppressContentEditableWarning
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            onPaste={handlePaste}
+            data-line-id={line.id}
+            data-placeholder={placeholder}
+            className={`journal-line flex-1 outline-none text-ink bg-transparent min-w-0 break-words ${extraClass}`}
+            style={LINE_STYLE}
+        />
+    )
+
+    const checked = Boolean(line.checked)
+    const xpBadge = !isTemplate && checked && Number(line.xp) > 0 && (
+        <span className="mt-1.5 text-sm text-green-600 font-semibold flex-shrink-0">+{line.xp} XP</span>
+    )
 
     const renderLineContent = () => {
         switch (line.type) {
@@ -161,75 +130,43 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onX
                     <div className="flex items-start gap-2">
                         <input
                             type="checkbox"
-                            checked={isChecked}
-                            className="mt-1.5 w-4 h-4 cursor-pointer"
-                            onChange={(e) => handleCheckboxChange(e.target.checked)}
+                            checked={checked}
+                            disabled={isTemplate}
+                            className="mt-2 w-4 h-4 cursor-pointer flex-shrink-0"
+                            onChange={(e) => onToggleCheck?.(e.target.checked)}
                         />
-                        <div
-                            ref={contentRef}
-                            contentEditable
-                            suppressContentEditableWarning
-                            onKeyDown={handleKeyDown}
-                            onInput={handleInput}
-                            data-line-id={line.id}
-                            className="flex-1 outline-none text-ink bg-transparent"
-                            style={{
-                                minHeight: '32px',
-                                lineHeight: '32px',
-                                fontSize: '18px',
-                                paddingTop: '0px'
-                            }}
-                            placeholder="Write something..."
-                        />
-                        {lineXP > 0 && (
-                            <span className="mt-1.5 text-sm text-green-600 font-semibold">
-                                +{lineXP} XP
-                            </span>
-                        )}
+                        {editable('Task...', checked ? 'line-through text-ink/50' : '')}
+                        {xpBadge}
                     </div>
                 )
 
             case 'checkbox-time':
                 return (
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
                         <input
                             type="checkbox"
-                            checked={isChecked}
-                            className="mt-1.5 w-4 h-4 cursor-pointer flex-shrink-0"
-                            onChange={(e) => handleCheckboxChange(e.target.checked)}
+                            checked={checked}
+                            disabled={isTemplate}
+                            className="mt-2 w-4 h-4 cursor-pointer flex-shrink-0"
+                            onChange={(e) => onToggleCheck?.(e.target.checked)}
                         />
                         <input
                             type="time"
-                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-20 sm:w-auto"
-                            defaultValue="00:00"
+                            value={line.timeStart || ''}
+                            onChange={(e) => onChange({ timeStart: e.target.value })}
+                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-24 sm:w-auto"
+                            aria-label="Start time"
                         />
                         <span className="mt-1.5 flex-shrink-0">-</span>
                         <input
                             type="time"
-                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-20 sm:w-auto"
-                            defaultValue="00:00"
+                            value={line.timeEnd || ''}
+                            onChange={(e) => onChange({ timeEnd: e.target.value })}
+                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-24 sm:w-auto"
+                            aria-label="End time"
                         />
-                        <div
-                            ref={contentRef}
-                            contentEditable
-                            suppressContentEditableWarning
-                            onKeyDown={handleKeyDown}
-                            onInput={handleInput}
-                            data-line-id={line.id}
-                            className="flex-1 outline-none text-ink bg-transparent min-w-0"
-                            style={{
-                                minHeight: '32px',
-                                lineHeight: '32px',
-                                fontSize: '18px',
-                                paddingTop: '0px'
-                            }}
-                            placeholder="Task..."
-                        />
-                        {lineXP > 0 && (
-                            <span className="mt-1.5 text-sm text-green-600 font-semibold flex-shrink-0">
-                                +{lineXP} XP
-                            </span>
-                        )}
+                        {editable('Task...', checked ? 'line-through text-ink/50' : '')}
+                        {xpBadge}
                     </div>
                 )
 
@@ -238,47 +175,17 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onX
                     <div className="flex items-start gap-2">
                         <input
                             type="radio"
-                            name={`radio-group-${line.id}`}
-                            className="mt-1.5 w-4 h-4 cursor-pointer"
+                            checked={Boolean(line.selected)}
+                            onChange={() => {}}
+                            onClick={() => onSelectRadio?.()}
+                            className="mt-2 w-4 h-4 cursor-pointer flex-shrink-0"
                         />
-                        <div
-                            ref={contentRef}
-                            contentEditable
-                            suppressContentEditableWarning
-                            onKeyDown={handleKeyDown}
-                            onInput={handleInput}
-                            data-line-id={line.id}
-                            className="flex-1 outline-none text-ink bg-transparent"
-                            style={{
-                                minHeight: '32px',
-                                lineHeight: '32px',
-                                fontSize: '18px',
-                                paddingTop: '0px'
-                            }}
-                            placeholder="Option..."
-                        />
+                        {editable('Option...')}
                     </div>
                 )
 
             default:
-                return (
-                    <div
-                        ref={contentRef}
-                        contentEditable
-                        suppressContentEditableWarning
-                        onKeyDown={handleKeyDown}
-                        onInput={handleInput}
-                        data-line-id={line.id}
-                        className="outline-none text-ink bg-transparent w-full"
-                        style={{
-                            minHeight: '32px',
-                            lineHeight: '32px',
-                            fontSize: '18px',
-                            paddingTop: '0px'
-                        }}
-                        placeholder="Write something..."
-                    />
-                )
+                return <div className="flex">{editable('Write something...')}</div>
         }
     }
 
@@ -286,26 +193,21 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onX
         <div className="editable-line flex items-start gap-2 group relative">
             <button
                 onClick={() => setShowTypeMenu(!showTypeMenu)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-line/30 rounded mt-1"
+                className="opacity-30 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 hover:bg-line/30 rounded mt-1 flex-shrink-0"
                 aria-label="Line options"
             >
-                <svg
-                    className="w-4 h-4 text-ink/60"
-                    fill="currentColor"
-                    viewBox="0 0 16 16"
-                >
+                <svg className="w-4 h-4 text-ink/60" fill="currentColor" viewBox="0 0 16 16">
                     <circle cx="8" cy="2" r="1.5" />
                     <circle cx="8" cy="8" r="1.5" />
                     <circle cx="8" cy="14" r="1.5" />
                 </svg>
             </button>
 
-            <div className="flex-1 flex items-start gap-2">
-                <div className="flex-1">
+            <div className="flex-1 flex items-start gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
                     {renderLineContent()}
                 </div>
 
-                {/* Reminder Indicator */}
                 {hasReminder && (
                     <button
                         onClick={() => setShowReminderModal(true)}
@@ -322,10 +224,12 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onX
             {showTypeMenu && (
                 <LineTypeMenu
                     currentType={line.type}
-                    hasContent={line.content.trim() !== ''}
+                    hasContent={(line.content || '').trim() !== ''}
+                    allowReminder={!isTemplate}
                     onSelect={(type) => {
-                        onUpdate(line.id, line.content, type)
                         setShowTypeMenu(false)
+                        if (type !== line.type) onTypeChange?.(type)
+                        focusLine(line.id)
                     }}
                     onSetReminder={() => {
                         setShowReminderModal(true)
@@ -341,18 +245,8 @@ function EditableLine({ line, onUpdate, onEnter, onDelete, autoFocus, dayId, onX
                     dayId={dayId}
                     lineContent={line.content}
                     onClose={() => setShowReminderModal(false)}
-                    onSave={checkForReminder}
                 />
             )}
-
-            <XPPromptModal
-                isOpen={showXPPrompt}
-                onConfirm={handleXPConfirm}
-                onCancel={() => {
-                    setShowXPPrompt(false)
-                }}
-                defaultValue={10}
-            />
         </div>
     )
 }

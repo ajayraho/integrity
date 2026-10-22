@@ -1,184 +1,133 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import EditableLine from './EditableLine'
+import { focusLine } from '../utils/focus'
 import DateHeader from './DateHeader'
 import HabitsSection from './HabitsSection'
-import { checkBadgeEligibility } from '../utils/storage'
+import XPPromptModal from './XPPromptModal'
+import { useStoreVersion } from '../hooks/useStore'
+import { useFeedback } from '../hooks/useFeedback'
+import { getDayOrDefault, saveDay, lineXP, getRemindersForLine, deleteRemindersForLine } from '../utils/storage'
+import { insertAfter, patchLine, removeLine, selectRadio, linesFromTemplate, newLine } from '../utils/lineOps'
+import { formatLongDate } from '../utils/date'
 
-function DaySection({ day, onUpdate, isFirst, showXPGain, showXPLoss, showBadge, showMedal }) {
-    const sectionRef = useRef(null)
-    const [lines, setLines] = useState(day.lines)
-
-    useEffect(() => {
-        setLines(day.lines)
-    }, [day.lines])
-
-    const handleXPChange = (amount, type) => {
-        if (type === 'gain') {
-            showXPGain?.(Math.abs(amount))
-            // Check for badge eligibility
-            checkBadgesForDay()
-        } else if (type === 'loss') {
-            showXPLoss?.(Math.abs(amount))
-        }
-    }
-
-    const checkBadgesForDay = () => {
-        const dateStr = day.id // Assuming day.id is in YYYY-MM-DD format
-        const earnedBadges = checkBadgeEligibility(dateStr)
-
-        // Show notification for each earned badge
-        earnedBadges.forEach((badge, index) => {
-            setTimeout(() => {
-                showBadge?.(badge)
-            }, index * 1000) // Stagger notifications
-        })
-    }
-
-    const formatDate = (date) => {
-        const d = new Date(date)
-        const day = d.getDate()
-        const suffix = ['th', 'st', 'nd', 'rd']
-        const v = day % 100
-        const ordinal = suffix[(v - 20) % 10] || suffix[v] || suffix[0]
-
-        return d.toLocaleDateString('en-US', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        }).replace(/\d+/, day + ordinal)
-    }
-
-    const addLine = (afterIndex) => {
-        const newLine = {
-            id: `${day.id}-${Date.now()}`,
-            content: '',
-            type: 'text'
-        }
-        const newLines = [
-            ...lines.slice(0, afterIndex + 1),
-            newLine,
-            ...lines.slice(afterIndex + 1)
-        ]
-        setLines(newLines)
-        onUpdate(day.id, newLines)
-        return newLine.id
-    }
-
-    const updateLine = (lineId, content, type, checked, xp) => {
-        const newLines = lines.map(line =>
-            line.id === lineId ? { ...line, content, type, checked, xp } : line
-        )
-        setLines(newLines)
-        onUpdate(day.id, newLines, day.habits)
-    }
-
-    const deleteLine = (lineId) => {
-        if (lines.length === 1) return null // Keep at least one line
-
-        const lineIndex = lines.findIndex(line => line.id === lineId)
-        const newLines = lines.filter(line => line.id !== lineId)
-        setLines(newLines)
-        onUpdate(day.id, newLines, day.habits)
-
-        // Return the previous line's ID if it exists, otherwise return the next line (which becomes the new line at this position)
-        if (lineIndex > 0) {
-            return lines[lineIndex - 1].id
-        } else if (newLines.length > 0) {
-            // If deleting the first line, return the ID of what will become the new first line
-            return newLines[0].id
-        }
-        return null
-    }
-
-    const handleHabitsUpdate = (updatedHabits) => {
-        onUpdate(day.id, lines, updatedHabits)
-    }
-
-    const applyTemplate = (template) => {
-        console.log('applyTemplate called with:', template)
-        if (template && template.lines) {
-            // Create new lines from template with unique IDs
-            const newLines = template.lines.map((templateLine, index) => ({
-                id: `${day.id}-${Date.now()}-${index}`,
-                type: templateLine.type || 'text',
-                content: templateLine.content || ''
-            }))
-
-            console.log('Applying new lines:', newLines)
-            setLines(newLines)
-            onUpdate(day.id, newLines, day.habits)
-        } else {
-            console.log('Template is invalid or has no lines')
-        }
-    }
-
-    return (
-        <div
-            ref={sectionRef}
-            data-day-id={day.id}
-            className="day-section snap-start min-h-screen relative pb-16 overflow-x-auto"
-            style={{
-                backgroundImage: `repeating-linear-gradient(
+const RULED_BACKGROUND = {
+    backgroundImage: `repeating-linear-gradient(
           transparent,
           transparent 31px,
           #D1E5F4 31px,
           #D1E5F4 32px
         )`,
-                backgroundPosition: '0 104px',
-                backgroundAttachment: 'local',
-                backgroundSize: '100% auto',
-                paddingTop: '16px'
-            }}
+    backgroundPosition: '0 104px',
+    backgroundAttachment: 'local',
+    backgroundSize: '100% auto',
+    paddingTop: '16px',
+}
+
+function DaySection({ dayId, isToday, autoFocus }) {
+    useStoreVersion() // re-render on any data change (local or from another device)
+    const { celebrate } = useFeedback()
+    const [xpPromptLine, setXpPromptLine] = useState(null)
+
+    const day = getDayOrDefault(dayId)
+    const lines = day.lines?.length ? day.lines : [{ id: `${dayId}-1`, type: 'text', content: '' }]
+
+    const setLines = (newLines) => saveDay(dayId, { lines: newLines })
+
+    // XP removed with these lines (if any were completed tasks)
+    const xpOf = (ls) => ls.reduce((s, l) => s + lineXP(l), 0)
+
+    const addLine = (index) => {
+        const line = newLine()
+        setLines(insertAfter(lines, index, line))
+        focusLine(line.id)
+    }
+
+    const updateLine = (lineId, patch) => setLines(patchLine(lines, lineId, patch))
+
+    const deleteLine = (index) => {
+        if (lines.length === 1) return
+        const line = lines[index]
+        const lost = lineXP(line)
+        setLines(removeLine(lines, line.id))
+        deleteRemindersForLine(line.id)
+        if (lost) celebrate(-lost, dayId)
+        const target = index > 0 ? lines[index - 1] : lines[1]
+        focusLine(target.id, index > 0)
+    }
+
+    const toggleCheck = (line, checked) => {
+        if (checked) {
+            setXpPromptLine(line)
+        } else {
+            const lost = lineXP(line)
+            updateLine(line.id, { checked: false })
+            if (lost) celebrate(-lost, dayId)
+        }
+    }
+
+    const confirmXP = (xp) => {
+        const line = xpPromptLine
+        setXpPromptLine(null)
+        if (!line) return
+        updateLine(line.id, { checked: true, xp, completedAt: new Date().toISOString() })
+        celebrate(xp, dayId)
+    }
+
+    const changeType = (line, type) => {
+        const stillTask = type === 'checkbox' || type === 'checkbox-time'
+        const lost = stillTask ? 0 : lineXP(line)
+        updateLine(line.id, stillTask ? { type } : { type, checked: false })
+        if (lost) celebrate(-lost, dayId)
+    }
+
+    const applyTemplate = (template) => {
+        const lost = xpOf(lines)
+        lines.forEach(l => deleteRemindersForLine(l.id))
+        setLines(linesFromTemplate(template))
+        if (lost) celebrate(-lost, dayId)
+    }
+
+    return (
+        <div
+            data-day-id={dayId}
+            className="day-section snap-start min-h-screen relative pb-16"
+            style={RULED_BACKGROUND}
         >
             <DateHeader
-                date={formatDate(day.date)}
-                dayId={day.id}
-                dayDate={day.date}
+                date={formatLongDate(dayId)}
+                dayId={dayId}
+                isToday={isToday}
                 lines={lines}
                 onApplyTemplate={applyTemplate}
             />
 
-            <div className="lines-container px-4 md:px-8 lg:px-16 min-w-full" style={{ paddingTop: '24px' }}>
+            <div className="lines-container px-4 md:px-8 lg:px-16" style={{ paddingTop: '24px' }}>
                 {lines.map((line, index) => (
                     <EditableLine
-                        key={`${line.id}-${line.type}`}
+                        key={line.id}
                         line={line}
-                        dayId={day.id}
-                        onUpdate={updateLine}
+                        dayId={dayId}
+                        reminders={getRemindersForLine(line.id)}
+                        onChange={(patch) => updateLine(line.id, patch)}
                         onEnter={() => addLine(index)}
-                        onDelete={() => {
-                            const prevLineId = deleteLine(line.id)
-                            if (prevLineId) {
-                                // Focus the previous/next line
-                                setTimeout(() => {
-                                    const targetLine = document.querySelector(`[data-line-id="${prevLineId}"]`)
-                                    if (targetLine) {
-                                        targetLine.focus()
-                                        // Move cursor to end if it was a previous line (normal delete)
-                                        // Move cursor to start if it's the new first line (deleted first line)
-                                        const range = document.createRange()
-                                        const selection = window.getSelection()
-                                        range.selectNodeContents(targetLine)
-                                        // If this was the first line (index 0), cursor at start, otherwise at end
-                                        range.collapse(index === 0 ? true : false)
-                                        selection.removeAllRanges()
-                                        selection.addRange(range)
-                                    }
-                                }, 0)
-                            }
-                        }}
-                        autoFocus={isFirst && index === 0}
-                        onXPChange={handleXPChange}
+                        onDelete={() => deleteLine(index)}
+                        onToggleCheck={(checked) => toggleCheck(line, checked)}
+                        onSelectRadio={() => setLines(selectRadio(lines, line.id))}
+                        onTypeChange={(type) => changeType(line, type)}
+                        autoFocus={autoFocus && index === 0}
                     />
                 ))}
             </div>
 
-            <HabitsSection
-                dayId={day.id}
-                habits={day.habits || {}}
-                onUpdate={handleHabitsUpdate}
-                onXPChange={handleXPChange}
-            />
+            <HabitsSection dayId={dayId} />
+
+            {xpPromptLine && <XPPromptModal
+                key={xpPromptLine.id}
+                isOpen
+                onConfirm={confirmXP}
+                onCancel={() => setXpPromptLine(null)}
+                defaultValue={Number(xpPromptLine?.xp) || 10}
+            />}
         </div>
     )
 }

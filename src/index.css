@@ -80,3 +80,9 @@ body {
 .animation-delay-400 {
   animation-delay: 0.4s;
 }
+/* Placeholder for empty contentEditable lines (shown only while focused) */
+.journal-line:empty:focus::before {
+  content: attr(data-placeholder);
+  color: rgba(44, 62, 80, 0.35);
+  pointer-events: none;
+}

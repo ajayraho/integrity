@@ -1,12 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 
 function XPPromptModal({ isOpen, onConfirm, onCancel, defaultValue = 10 }) {
+    // Parent mounts a fresh modal per prompt, so the initial value is enough
     const [xpValue, setXpValue] = useState(defaultValue)
-
-    useEffect(() => {
-        setXpValue(defaultValue)
-    }, [defaultValue, isOpen])
 
     if (!isOpen) return null
 

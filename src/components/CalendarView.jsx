@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react'
-import { loadEntries, saveEntries } from '../utils/storage'
+import { useState } from 'react'
+import { getDay, dayHasContent, loadHabits } from '../utils/storage'
+import { useStoreVersion } from '../hooks/useStore'
+import { toDateId } from '../utils/date'
 
-function CalendarView() {
-    const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 8)) // Feb 8, 2026
-    const [entries, setEntries] = useState([])
+function CalendarView({ onOpenDay }) {
+    useStoreVersion()
+    const [currentDate, setCurrentDate] = useState(() => new Date())
     const [selectedDay, setSelectedDay] = useState(null)
-
-    useEffect(() => {
-        setEntries(loadEntries())
-    }, [])
+    const habitsById = new Map(loadHabits().map(h => [h.id, h]))
 
     const getDaysInMonth = (date) => {
         const year = date.getFullYear()
@@ -24,15 +23,11 @@ function CalendarView() {
     const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentDate)
 
     const getEntryForDate = (day) => {
-        const dateStr = new Date(year, month, day).toISOString().split('T')[0]
-        return entries.find(entry => entry.id === dateStr)
+        return getDay(toDateId(new Date(year, month, day)))
     }
 
     const hasContent = (day) => {
-        const entry = getEntryForDate(day)
-        if (!entry) return false
-        return entry.lines.some(line => line.content.trim() !== '') ||
-            Object.keys(entry.habits || {}).length > 0
+        return dayHasContent(getEntryForDate(day))
     }
 
     const previousMonth = () => {
@@ -50,7 +45,7 @@ function CalendarView() {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
     const isToday = (day) => {
-        const today = new Date(2026, 1, 8) // Feb 8, 2026
+        const today = new Date()
         return day === today.getDate() &&
             month === today.getMonth() &&
             year === today.getFullYear()
@@ -119,8 +114,7 @@ function CalendarView() {
                                                 aspect-square rounded-lg border-2 transition-all
                                                 flex flex-col items-center justify-center
                                                 hover:border-ink hover:shadow-md
-                                                ${isSelected ? 'border-ink bg-ink text-white' : 'border-line bg-white'}
-                                                ${today && !isSelected ? 'border-ink/50 bg-ink/5' : ''}
+                                                ${isSelected ? 'border-ink bg-ink text-white' : today ? 'border-ink bg-ink/10' : 'border-line bg-white'}
                                             `}
                                         >
                                             <span className={`text-lg font-semibold ${isSelected ? 'text-white' : 'text-ink'}`}>
@@ -144,14 +138,20 @@ function CalendarView() {
                                     <h3 className="text-xl font-bold text-ink mb-4">
                                         {monthNames[month]} {selectedDay}, {year}
                                     </h3>
+                                    <button
+                                        onClick={() => onOpenDay?.(toDateId(new Date(year, month, selectedDay)))}
+                                        className="mb-4 px-3 py-1.5 text-sm bg-ink text-white rounded-lg"
+                                    >
+                                        Open in journal →
+                                    </button>
                                     {selectedEntry ? (
                                         <div className="space-y-4">
-                                            {selectedEntry.lines.filter(line => line.content.trim() !== '').length > 0 && (
+                                            {selectedEntry.lines.filter(line => (line.content || '').trim() !== '').length > 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-semibold text-ink/60 mb-2">Notes:</h4>
                                                     <div className="space-y-2">
                                                         {selectedEntry.lines
-                                                            .filter(line => line.content.trim() !== '')
+                                                            .filter(line => (line.content || '').trim() !== '')
                                                             .map(line => (
                                                                 <div key={line.id} className="text-ink text-sm pl-3 border-l-2 border-line">
                                                                     {line.content}
@@ -160,21 +160,27 @@ function CalendarView() {
                                                     </div>
                                                 </div>
                                             )}
-                                            {Object.keys(selectedEntry.habits || {}).length > 0 && (
+                                            {Object.values(selectedEntry.habits || {}).some(v => v !== '' && v !== false && v != null) && (
                                                 <div>
                                                     <h4 className="text-sm font-semibold text-ink/60 mb-2">Habits:</h4>
                                                     <div className="space-y-1 text-sm text-ink">
-                                                        {Object.entries(selectedEntry.habits).map(([habitId, value]) => (
-                                                            <div key={habitId} className="flex items-center gap-2">
-                                                                <span className="w-2 h-2 rounded-full bg-green-500" />
-                                                                <span>{value === true ? '✓' : value}</span>
-                                                            </div>
-                                                        ))}
+                                                        {Object.entries(selectedEntry.habits)
+                                                            .filter(([, value]) => value !== '' && value !== false && value != null)
+                                                            .map(([habitId, value]) => {
+                                                                const habit = habitsById.get(habitId)
+                                                                return (
+                                                                    <div key={habitId} className="flex items-center gap-2">
+                                                                        <span>{habit?.icon || '•'}</span>
+                                                                        <span>{habit?.name || 'Deleted habit'}</span>
+                                                                        <span className="text-ink/60">{value === true || value === 'true' ? '✓' : value}</span>
+                                                                    </div>
+                                                                )
+                                                            })}
                                                     </div>
                                                 </div>
                                             )}
-                                            {selectedEntry.lines.filter(line => line.content.trim() !== '').length === 0 &&
-                                                Object.keys(selectedEntry.habits || {}).length === 0 && (
+                                            {selectedEntry.lines.filter(line => (line.content || '').trim() !== '').length === 0 &&
+                                                !Object.values(selectedEntry.habits || {}).some(v => v !== '' && v !== false && v != null) && (
                                                     <p className="text-gray-400 text-sm">No content for this day</p>
                                                 )}
                                         </div>

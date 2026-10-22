@@ -1,14 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 
 function HabitReorderModal({ habits, onClose, onSave }) {
-    const [orderedHabits, setOrderedHabits] = useState([])
+    // Snapshot once on open so live store updates don't reset an in-progress reorder
+    const [orderedHabits, setOrderedHabits] = useState(() => habits.map(h => ({ ...h, visible: h.visible !== false })))
     const [draggedIndex, setDraggedIndex] = useState(null)
-
-    useEffect(() => {
-        // Initialize with current habits, ensure visibility property exists
-        setOrderedHabits(habits.map(h => ({ ...h, visible: h.visible !== false })))
-    }, [habits])
 
     const handleDragStart = (index) => {
         setDraggedIndex(index)
@@ -32,9 +28,19 @@ function HabitReorderModal({ habits, onClose, onSave }) {
     }
 
     const toggleVisibility = (index) => {
-        const newHabits = [...orderedHabits]
-        newHabits[index].visible = !newHabits[index].visible
-        setOrderedHabits(newHabits)
+        setOrderedHabits(prev => prev.map((h, i) => i === index ? { ...h, visible: !h.visible } : h))
+    }
+
+    // Up/down buttons: drag-and-drop doesn't work on touch screens
+    const move = (index, delta) => {
+        const target = index + delta
+        if (target < 0 || target >= orderedHabits.length) return
+        setOrderedHabits(prev => {
+            const next = [...prev]
+            const [item] = next.splice(index, 1)
+            next.splice(target, 0, item)
+            return next
+        })
     }
 
     const handleSave = () => {
@@ -62,7 +68,7 @@ function HabitReorderModal({ habits, onClose, onSave }) {
                             ×
                         </button>
                     </div>
-                    <p className="text-sm text-ink/60 mt-2">Drag to reorder, click eye to hide/show</p>
+                    <p className="text-sm text-ink/60 mt-2">Drag or use ▲▼ to reorder, tap the eye to hide/show</p>
                 </div>
 
                 {/* Habits List */}
@@ -88,6 +94,12 @@ function HabitReorderModal({ habits, onClose, onSave }) {
                                     {habit.icon}
                                 </span>
                                 <span className="font-medium text-ink">{habit.name}</span>
+                            </div>
+
+                            {/* Move buttons (touch friendly) */}
+                            <div className="flex flex-col">
+                                <button onClick={() => move(index, -1)} disabled={index === 0} className="px-2 text-ink/60 hover:text-ink disabled:opacity-20" aria-label="Move up">▲</button>
+                                <button onClick={() => move(index, 1)} disabled={index === orderedHabits.length - 1} className="px-2 text-ink/60 hover:text-ink disabled:opacity-20" aria-label="Move down">▼</button>
                             </div>
 
                             {/* Visibility Toggle */}

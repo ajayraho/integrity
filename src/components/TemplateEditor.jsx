@@ -1,95 +1,58 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import EditableLine from './EditableLine'
+import { focusLine } from '../utils/focus'
 import { updateTemplate } from '../utils/storage'
+import { insertAfter, patchLine, removeLine, newLine } from '../utils/lineOps'
+import { uid } from '../utils/date'
 
 function TemplateEditor({ template, onClose, onSave }) {
-    const [lines, setLines] = useState([])
-    const [templateName, setTemplateName] = useState('')
-    const [isDefault, setIsDefault] = useState(false)
+    // Old templates were saved without line ids; give every line one so edits
+    // only touch the line being edited.
+    const [lines, setLines] = useState(() => {
+        const src = template?.lines?.length ? template.lines : [{ type: 'text', content: '' }]
+        return src.map(l => ({ id: l.id || uid(), type: l.type || 'text', content: l.content || '' }))
+    })
+    const [templateName, setTemplateName] = useState(template?.name || 'Untitled Template')
+    const [isDefault, setIsDefault] = useState(Boolean(template?.isDefault))
     const [isEditingName, setIsEditingName] = useState(false)
+    const [error, setError] = useState('')
 
     useEffect(() => {
-        if (template) {
-            setLines(template.lines || [{ id: `temp-${Date.now()}`, content: '', type: 'text' }])
-            setTemplateName(template.name || 'Untitled Template')
-            setIsDefault(template.isDefault || false)
-        }
-
-        // Prevent background scroll
         document.body.style.overflow = 'hidden'
-
-        return () => {
-            document.body.style.overflow = ''
-        }
-    }, [template])
-
-    const addLine = useCallback((afterIndex) => {
-        const newLine = {
-            id: `temp-${Date.now()}`,
-            content: '',
-            type: 'text'
-        }
-        setLines(prev => {
-            const newLines = [...prev]
-            newLines.splice(afterIndex + 1, 0, newLine)
-            return newLines
-        })
-        return newLine.id
+        return () => { document.body.style.overflow = '' }
     }, [])
 
-    const updateLine = useCallback((lineId, content, type) => {
-        setLines(prev => prev.map(line =>
-            line.id === lineId ? { ...line, content, type } : line
-        ))
-    }, [])
+    const addLine = (afterIndex) => {
+        const line = newLine()
+        setLines(prev => insertAfter(prev, afterIndex, line))
+        focusLine(line.id)
+    }
 
-    const deleteLine = useCallback((lineId) => {
-        setLines(prev => {
-            if (prev.length === 1) return prev // Keep at least one line
+    const updateLine = (lineId, patch) => {
+        setLines(prev => patchLine(prev, lineId, patch))
+    }
 
-            const lineIndex = prev.findIndex(line => line.id === lineId)
-            const newLines = prev.filter(line => line.id !== lineId)
-
-            // Return the previous line's ID if it exists for focus handling
-            if (lineIndex > 0) {
-                setTimeout(() => {
-                    const prevLine = document.querySelector(`[data-line-id="${prev[lineIndex - 1].id}"]`)
-                    if (prevLine) {
-                        prevLine.focus()
-                        const range = document.createRange()
-                        const selection = window.getSelection()
-                        range.selectNodeContents(prevLine)
-                        range.collapse(false)
-                        selection.removeAllRanges()
-                        selection.addRange(range)
-                    }
-                }, 0)
-            }
-
-            return newLines
-        })
-    }, [])
+    const deleteLine = (index) => {
+        if (lines.length === 1) return
+        const target = index > 0 ? lines[index - 1] : lines[1]
+        setLines(prev => removeLine(prev, lines[index].id))
+        focusLine(target.id, index > 0)
+    }
 
     const handleSave = () => {
         if (!templateName.trim()) {
-            alert('Please enter a template name')
+            setError('Please enter a template name')
             return
         }
-
         const updatedTemplate = {
             ...template,
             name: templateName.trim(),
-            isDefault: isDefault,
-            lines: lines.map(line => ({
-                type: line.type,
-                content: line.content || ''
-            })),
-            updatedAt: new Date().toISOString()
+            isDefault,
+            lines: lines.map(line => ({ id: line.id, type: line.type, content: line.content || '' })),
         }
-
         updateTemplate(template.id, updatedTemplate)
-        onSave(updatedTemplate)
+        onSave?.(updatedTemplate)
         onClose()
     }
 
@@ -141,7 +104,8 @@ function TemplateEditor({ template, onClose, onSave }) {
                     </button>
                 </div>
 
-                <div className="flex items-center gap-4">
+                {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+                <div className="flex items-center gap-4 flex-wrap">
                     <label className="flex items-center gap-2 cursor-pointer">
                         <input
                             type="checkbox"
@@ -186,12 +150,13 @@ function TemplateEditor({ template, onClose, onSave }) {
                 <div className="lines-container px-4 md:px-8 lg:px-16 min-h-screen" style={{ paddingTop: '24px' }}>
                     {lines.map((line, index) => (
                         <EditableLine
-                            key={`${line.id}-${line.type}`}
+                            key={line.id}
                             line={line}
-                            dayId="template-editor"
-                            onUpdate={updateLine}
+                            mode="template"
+                            onChange={(patch) => updateLine(line.id, patch)}
+                            onTypeChange={(type) => updateLine(line.id, { type })}
                             onEnter={() => addLine(index)}
-                            onDelete={() => deleteLine(line.id)}
+                            onDelete={() => deleteLine(index)}
                             autoFocus={index === 0}
                         />
                     ))}

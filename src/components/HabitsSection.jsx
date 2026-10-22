@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadHabits, saveHabits, addXP, removeXPForSource, getXPForSource } from '../utils/storage'
+import { loadHabits, saveHabitOrder, getDayOrDefault, setHabitValue, resetHabits } from '../utils/storage'
+import { useFeedback } from '../hooks/useFeedback'
 import ConfirmDialog from './ConfirmDialog'
 import HabitReorderModal from './HabitReorderModal'
 
-function HabitsSection({ dayId, habits, onUpdate, onXPChange }) {
-    const [allHabits, setAllHabits] = useState([])
-    const [dayHabits, setDayHabits] = useState(habits || {})
+function HabitsSection({ dayId }) {
+    // Parent DaySection re-renders on every store change, so these are live
+    const allHabits = loadHabits()
+    const dayHabits = getDayOrDefault(dayId).habits || {}
+    const { celebrate } = useFeedback()
     const [showMenu, setShowMenu] = useState(false)
     const [showReorderModal, setShowReorderModal] = useState(false)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
@@ -24,92 +27,9 @@ function HabitsSection({ dayId, habits, onUpdate, onXPChange }) {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [showMenu])
 
-    useEffect(() => {
-        // Load all defined habits
-        const loaded = loadHabits()
-        setAllHabits(loaded.sort((a, b) => (a.order || 0) - (b.order || 0)))
-    }, [])
-
-    useEffect(() => {
-        setDayHabits(habits || {})
-    }, [habits])
-
-    const handleSaveReorder = (reorderedHabits) => {
-        // Update habits with new order and visibility
-        const updatedHabits = reorderedHabits.map((habit, index) => ({
-            ...habit,
-            order: index,
-            visible: habit.visible
-        }))
-        saveHabits(updatedHabits)
-        setAllHabits(updatedHabits)
-    }
-
     const handleHabitChange = (habitId, value) => {
-        let updated
-        if (habitId === null) {
-            // Bulk update (for reset all)
-            updated = value
-        } else {
-            // Single habit update - handle XP
-            const habit = allHabits.find(h => h.id === habitId)
-            if (habit && habit.xp) {
-                const oldValue = dayHabits[habitId]
-                handleXPChange(habit, oldValue, value)
-            }
-            updated = { ...dayHabits, [habitId]: value }
-        }
-        setDayHabits(updated)
-        onUpdate(updated)
-    }
-
-    const handleXPChange = (habit, oldValue, newValue) => {
-        const dateStr = dayId // Assuming dayId is in YYYY-MM-DD format
-
-        if (habit.type === 'checkbox') {
-            // Boolean habit: full XP on check, remove XP on uncheck
-            const wasChecked = oldValue === true || oldValue === 'true'
-            const isChecked = newValue === true || newValue === 'true'
-
-            if (isChecked && !wasChecked) {
-                // Gained XP
-                addXP(dateStr, habit.xp, 'habit', habit.id, habit.name)
-                onXPChange?.(habit.xp, 'gain')
-            } else if (!isChecked && wasChecked) {
-                // Lost XP
-                const removedXP = removeXPForSource(habit.id, dateStr)
-                if (removedXP > 0) {
-                    onXPChange?.(-removedXP, 'loss')
-                }
-            }
-        } else if (habit.type === 'number' && habit.goal) {
-            // Number habit: proportional XP based on goal
-            const oldNum = parseFloat(oldValue) || 0
-            const newNum = parseFloat(newValue) || 0
-
-            // Calculate XP based on progress toward goal
-            const oldXP = Math.min((oldNum / habit.goal) * habit.xp, habit.xp)
-            const newXP = Math.min((newNum / habit.goal) * habit.xp, habit.xp)
-
-            const xpDiff = Math.round(newXP - oldXP)
-
-            if (xpDiff !== 0) {
-                // Remove old XP entries for this habit today
-                removeXPForSource(habit.id, dateStr)
-
-                // Add new XP if any
-                if (newXP > 0) {
-                    addXP(dateStr, Math.round(newXP), 'habit', habit.id, habit.name)
-                }
-
-                // Notify parent
-                if (xpDiff > 0) {
-                    onXPChange?.(xpDiff, 'gain')
-                } else if (xpDiff < 0) {
-                    onXPChange?.(xpDiff, 'loss')
-                }
-            }
-        }
+        const delta = setHabitValue(dayId, habitId, value)
+        if (delta) celebrate(delta, dayId)
     }
 
     const renderHabitInput = (habit) => {
@@ -130,7 +50,9 @@ function HabitsSection({ dayId, habits, onUpdate, onXPChange }) {
                 return (
                     <input
                         type="number"
-                        value={value || ''}
+                        value={value ?? ''}
+                        min="0"
+                        inputMode="decimal"
                         onChange={(e) => handleHabitChange(habit.id, e.target.value)}
                         placeholder="0"
                         className="w-14 sm:w-16 px-2 py-1 border border-line rounded text-center bg-transparent outline-none focus:border-ink"
@@ -192,28 +114,18 @@ function HabitsSection({ dayId, habits, onUpdate, onXPChange }) {
                                 setConfirmDialog({
                                     isOpen: true,
                                     action: () => {
-                                        const cleared = {}
-                                        allHabits.forEach(h => cleared[h.id] = h.type === 'checkbox' ? false : '')
-                                        handleHabitChange(null, cleared)
+                                        const delta = resetHabits(dayId)
+                                        if (delta) celebrate(delta, dayId)
                                         setShowMenu(false)
                                         setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
                                     },
                                     title: 'Reset All Habits',
-                                    message: 'Are you sure you want to reset all habits for today? This will clear all checkboxes and reset all values.'
+                                    message: 'Reset all habits for this day? This will clear all checkboxes and reset all values.'
                                 })
                             }}
                             className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors text-sm text-ink"
                         >
                             🔄 Reset All
-                        </button>
-                        <button
-                            onClick={() => {
-                                setShowMenu(false)
-                                // Could add more options here later
-                            }}
-                            className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors text-sm text-ink"
-                        >
-                            📊 View Statistics
                         </button>
                     </div>
                 )}
@@ -248,7 +160,7 @@ function HabitsSection({ dayId, habits, onUpdate, onXPChange }) {
                 <HabitReorderModal
                     habits={allHabits}
                     onClose={() => setShowReorderModal(false)}
-                    onSave={handleSaveReorder}
+                    onSave={saveHabitOrder}
                 />
             )}
         </div>

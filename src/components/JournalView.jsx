@@ -1,292 +1,155 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import DaySection from './DaySection'
 import JumpToTodayButton from './JumpToTodayButton'
-import { loadEntries, saveEntries, getDefaultTemplate } from '../utils/storage'
+import { todayId as getTodayId, addDays } from '../utils/date'
 
-function JournalView({ viewType, showXPGain, showXPLoss, showBadge, showMedal }) {
-    const [days, setDays] = useState([])
-    const [showJumpButton, setShowJumpButton] = useState(false)
+const PAGE = 7 // days loaded per scroll step
+
+function rangeAround(centerId, before, after) {
+    const ids = []
+    for (let i = -before; i <= after; i++) ids.push(addDays(centerId, i))
+    return ids
+}
+
+/**
+ * Continuous scroll journal. Holds only the list of visible day ids; each
+ * DaySection reads/writes its own day in the store, so loading more days never
+ * touches (or overwrites) saved data.
+ */
+function JournalView({ initialDayId }) {
+    const [todayId, setTodayId] = useState(getTodayId)
+    const [dayIds, setDayIds] = useState(() => rangeAround(initialDayId || todayId, 0, 1))
+    const anchorRef = useRef(initialDayId || todayId) // day to scroll to after render
+    const [todayOffscreen, setTodayOffscreen] = useState(false)
+    const containerRef = useRef(null)
     const topSentinelRef = useRef(null)
     const bottomSentinelRef = useRef(null)
-    const containerRef = useRef(null)
-    const loadingRef = useRef({ top: false, bottom: false })
-    const hasScrolledToToday = useRef(false)
-    const todayRef = useRef(null)
+    const prependRef = useRef(null) // { id, top } of the day on screen before prepending
 
-    // Create a day object
-    const createDay = useCallback((date) => {
-        // Format date as YYYY-MM-DD using local time (not UTC)
-        const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, '0')
-        const day = String(date.getDate()).padStart(2, '0')
-        const dateId = `${year}-${month}-${day}`
-
-        // Check if there's a default template
-        const defaultTemplate = getDefaultTemplate()
-
-        let lines
-        if (defaultTemplate && defaultTemplate.lines && defaultTemplate.lines.length > 0) {
-            // Use template lines with unique IDs
-            lines = defaultTemplate.lines.map((templateLine, index) => ({
-                id: `${dateId}-${Date.now()}-${index}`,
-                type: templateLine.type || 'text',
-                content: templateLine.content || ''
-            }))
-        } else {
-            // Default single empty line
-            lines = [{ id: `${dateId}-1`, content: '', type: 'text' }]
-        }
-
-        return {
-            id: dateId,
-            date: new Date(date),
-            lines: lines,
-            habits: {}
-        }
+    // Midnight rollover: keep "today" correct if the app stays open
+    useEffect(() => {
+        const t = setInterval(() => {
+            const id = getTodayId()
+            setTodayId(prev => (prev === id ? prev : id))
+        }, 60 * 1000)
+        return () => clearInterval(t)
     }, [])
 
     useEffect(() => {
-        // Disable browser scroll restoration to prevent jumping to saved position
-        if ('scrollRestoration' in history) {
-            history.scrollRestoration = 'manual'
-        }
-
-        // Load saved entries to check for existing content
-        const savedEntries = loadEntries()
-        const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
-
-        // Start with just today
-        const today = new Date()
-        const year = today.getFullYear()
-        const month = String(today.getMonth() + 1).padStart(2, '0')
-        const day = String(today.getDate()).padStart(2, '0')
-        const todayId = `${year}-${month}-${day}`
-
-        // Check if today has saved content, otherwise create new
-        const todayEntry = savedMap.get(todayId) || createDay(today)
-
-        setDays([todayEntry])
-
-        // Mark that we've already positioned at today
-        hasScrolledToToday.current = true
-
-        // Ensure scroll is at the top (today's entry) after mount
-        if (containerRef.current) {
-            containerRef.current.scrollTop = 0
-        }
-
-        // Cleanup: restore default scroll restoration
+        if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
         return () => {
-            if ('scrollRestoration' in history) {
-                history.scrollRestoration = 'auto'
-            }
+            if ('scrollRestoration' in history) history.scrollRestoration = 'auto'
         }
-    }, [createDay])
+    }, [])
 
-    // Load more past days
+    // Scroll the anchor day to the top after it renders
+    useLayoutEffect(() => {
+        const id = anchorRef.current
+        if (!id || !containerRef.current) return
+        const el = containerRef.current.querySelector(`[data-day-id="${id}"]`)
+        if (el) {
+            containerRef.current.scrollTop = el.parentElement.offsetTop
+            anchorRef.current = null
+        }
+    }, [dayIds])
+
+    // Keep the visible day in place when days are added above it
+    useLayoutEffect(() => {
+        const c = containerRef.current
+        const saved = prependRef.current
+        if (!c || !saved) return
+        prependRef.current = null
+        const el = c.querySelector(`[data-day-id="${saved.id}"]`)
+        if (el) c.scrollTop += el.getBoundingClientRect().top - saved.top
+    }, [dayIds])
+
     const loadPastDays = useCallback(() => {
-        if (loadingRef.current.top) return
-        loadingRef.current.top = true
-
-        setDays(prevDays => {
-            if (prevDays.length === 0) {
-                loadingRef.current.top = false
-                return prevDays
-            }
-
-            const oldestDay = prevDays[0]
-            const oldestDate = new Date(oldestDay.date)
-            const newDays = []
-            const existingIds = new Set(prevDays.map(d => d.id))
-
-            // Load saved entries to check for existing content
-            const savedEntries = loadEntries()
-            const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
-
-            for (let i = 1; i <= 7; i++) {
-                const date = new Date(oldestDate)
-                date.setDate(oldestDate.getDate() - i)
-                const year = date.getFullYear()
-                const month = String(date.getMonth() + 1).padStart(2, '0')
-                const day = String(date.getDate()).padStart(2, '0')
-                const dayId = `${year}-${month}-${day}`
-
-                if (!existingIds.has(dayId)) {
-                    // Check if this day has saved content
-                    const savedDay = savedMap.get(dayId)
-                    if (savedDay) {
-                        newDays.unshift(savedDay)
-                    } else {
-                        newDays.unshift(createDay(date))
-                    }
-                }
-            }
-
-            loadingRef.current.top = false
-            return [...newDays, ...prevDays]
+        if (anchorRef.current) return // wait until positioning is done
+        const c = containerRef.current
+        if (c && !prependRef.current) {
+            const cTop = c.getBoundingClientRect().top
+            const visible = [...c.querySelectorAll('[data-day-id]')].find(el => el.getBoundingClientRect().bottom > cTop + 1)
+            if (visible) prependRef.current = { id: visible.dataset.dayId, top: visible.getBoundingClientRect().top }
+        }
+        setDayIds(prev => {
+            const oldest = prev[0]
+            const more = []
+            for (let i = PAGE; i >= 1; i--) more.push(addDays(oldest, -i))
+            return [...more, ...prev]
         })
-    }, [createDay])
+    }, [])
 
-    // Load more future days
     const loadFutureDays = useCallback(() => {
-        if (loadingRef.current.bottom) return
-        loadingRef.current.bottom = true
-
-        setDays(prevDays => {
-            if (prevDays.length === 0) {
-                loadingRef.current.bottom = false
-                return prevDays
-            }
-
-            const newestDay = prevDays[prevDays.length - 1]
-            const newestDate = new Date(newestDay.date)
-            const newDays = []
-            const existingIds = new Set(prevDays.map(d => d.id))
-
-            // Load saved entries to check for existing content
-            const savedEntries = loadEntries()
-            const savedMap = new Map(savedEntries.map(entry => [entry.id, entry]))
-
-            for (let i = 1; i <= 7; i++) {
-                const date = new Date(newestDate)
-                date.setDate(newestDate.getDate() + i)
-                const year = date.getFullYear()
-                const month = String(date.getMonth() + 1).padStart(2, '0')
-                const day = String(date.getDate()).padStart(2, '0')
-                const dayId = `${year}-${month}-${day}`
-
-                if (!existingIds.has(dayId)) {
-                    // Check if this day has saved content
-                    const savedDay = savedMap.get(dayId)
-                    if (savedDay) {
-                        newDays.push(savedDay)
-                    } else {
-                        newDays.push(createDay(date))
-                    }
-                }
-            }
-
-            loadingRef.current.bottom = false
-            return [...prevDays, ...newDays]
+        setDayIds(prev => {
+            const newest = prev[prev.length - 1]
+            const more = []
+            for (let i = 1; i <= PAGE; i++) more.push(addDays(newest, i))
+            return [...prev, ...more]
         })
-    }, [createDay])
+    }, [])
 
-    // Intersection observer for infinite scroll
+    // Observers are re-created whenever the list changes; observe() reports the
+    // current state immediately, so if a sentinel is still visible we keep loading.
     useEffect(() => {
-        const topObserver = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting) {
-                    loadPastDays()
-                }
-            },
-            { threshold: 0.1 }
-        )
-
-        const bottomObserver = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting) {
-                    loadFutureDays()
-                }
-            },
-            { threshold: 0.1 }
-        )
-
-        if (topSentinelRef.current) {
-            topObserver.observe(topSentinelRef.current)
-        }
-        if (bottomSentinelRef.current) {
-            bottomObserver.observe(bottomSentinelRef.current)
-        }
-
+        const root = containerRef.current
+        if (!root) return
+        const opts = { root, rootMargin: '300px 0px' }
+        const top = new IntersectionObserver(([e]) => { if (e.isIntersecting) loadPastDays() }, opts)
+        const bottom = new IntersectionObserver(([e]) => { if (e.isIntersecting) loadFutureDays() }, opts)
+        if (topSentinelRef.current) top.observe(topSentinelRef.current)
+        if (bottomSentinelRef.current) bottom.observe(bottomSentinelRef.current)
         return () => {
-            topObserver.disconnect()
-            bottomObserver.disconnect()
+            top.disconnect()
+            bottom.disconnect()
         }
-    }, [loadPastDays, loadFutureDays])
+    }, [dayIds, loadPastDays, loadFutureDays])
 
+    // Show "Today" button when today isn't on screen
     useEffect(() => {
-        // Auto-save whenever days change
-        if (days.length > 0) {
-            saveEntries(days)
-        }
-    }, [days])
-
-    // Detect if today is visible in viewport
-    useEffect(() => {
-        if (!containerRef.current || !todayRef.current) return
-
+        const root = containerRef.current
+        const el = root?.querySelector(`[data-day-id="${todayId}"]`)
+        if (!el) return
         const observer = new IntersectionObserver(
-            ([entry]) => {
-                // Show button when today is NOT in viewport
-                setShowJumpButton(!entry.isIntersecting)
-            },
-            { threshold: 0.1, root: containerRef.current }
+            ([entry]) => setTodayOffscreen(!entry.isIntersecting),
+            { threshold: 0.1, root }
         )
-
-        observer.observe(todayRef.current)
-
+        observer.observe(el)
         return () => observer.disconnect()
-    }, [days])
+    }, [dayIds, todayId])
 
     const jumpToToday = () => {
-        if (todayRef.current) {
-            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        const el = containerRef.current?.querySelector(`[data-day-id="${todayId}"]`)
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        } else {
+            anchorRef.current = todayId
+            setDayIds(rangeAround(todayId, 0, 1))
         }
-    }
-
-    const updateDay = (dayId, updatedLines, habits) => {
-        setDays(prevDays =>
-            prevDays.map(day =>
-                day.id === dayId ? { ...day, lines: updatedLines, habits: habits || day.habits } : day
-            )
-        )
-    }
-
-    if (viewType !== 'continuous') {
-        return (
-            <div className="flex items-center justify-center h-screen text-gray-500">
-                <p className="text-lg">Other views coming soon...</p>
-            </div>
-        )
     }
 
     return (
         <>
             <div
                 ref={containerRef}
-                className="journal-view scroll-smooth snap-y snap-mandatory h-screen overflow-y-scroll"
+                className="journal-view snap-y snap-mandatory h-screen overflow-y-scroll overflow-x-hidden"
+                style={{ overflowAnchor: 'none' }}
             >
-                {/* Top sentinel for loading past days */}
-                <div ref={topSentinelRef} className="h-4" />
+                <div ref={topSentinelRef} className="h-px" />
 
-                {days.map((day, index) => {
-                    const today = new Date()
-                    const year = today.getFullYear()
-                    const month = String(today.getMonth() + 1).padStart(2, '0')
-                    const dayNum = String(today.getDate()).padStart(2, '0')
-                    const todayId = `${year}-${month}-${dayNum}`
-                    const isToday = day.id === todayId
+                {dayIds.map((id) => (
+                    <div key={id}>
+                        <DaySection
+                            dayId={id}
+                            isToday={id === todayId}
+                            autoFocus={false}
+                        />
+                    </div>
+                ))}
 
-                    return (
-                        <div key={day.id} ref={isToday ? todayRef : null}>
-                            <DaySection
-                                day={day}
-                                onUpdate={updateDay}
-                                isFirst={index === 0}
-                                showXPGain={showXPGain}
-                                showXPLoss={showXPLoss}
-                                showBadge={showBadge}
-                                showMedal={showMedal}
-                            />
-                        </div>
-                    )
-                })}
-
-                {/* Bottom sentinel for loading future days */}
-                <div ref={bottomSentinelRef} className="h-4" />
+                <div ref={bottomSentinelRef} className="h-px" />
             </div>
 
-            <JumpToTodayButton onJumpToToday={jumpToToday} isVisible={showJumpButton} />
+            <JumpToTodayButton onJumpToToday={jumpToToday} isVisible={!dayIds.includes(todayId) || todayOffscreen} />
         </>
     )
 }

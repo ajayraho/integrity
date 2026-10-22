@@ -1,46 +1,42 @@
 import { useState } from 'react'
-import { loginUser, registerUser } from '../utils/database'
+import { login, register, resetPassword, friendlyAuthError } from '../utils/auth'
 
-function Login({ onLogin }) {
-    const [username, setUsername] = useState('')
+function Login() {
+    const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
+    const [info, setInfo] = useState('')
     const [loading, setLoading] = useState(false)
     const [isRegisterMode, setIsRegisterMode] = useState(false)
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
+        setInfo('')
         setLoading(true)
-
         try {
-            let result
-
-            if (isRegisterMode) {
-                // Register new user
-                result = await registerUser(username, password)
-                if (result.success) {
-                    localStorage.setItem('isAuthenticated', 'true')
-                    localStorage.setItem('username', username)
-                    onLogin(username, password)
-                } else {
-                    setError(result.error || 'Registration failed')
-                }
-            } else {
-                // Login existing user
-                result = await loginUser(username, password)
-                if (result.success) {
-                    localStorage.setItem('isAuthenticated', 'true')
-                    localStorage.setItem('username', username)
-                    onLogin(username, password)
-                } else {
-                    setError(result.error || 'Login failed')
-                }
-            }
+            if (isRegisterMode) await register(email, password)
+            else await login(email, password)
+            // App reacts to the auth state change
         } catch (err) {
-            setError(err.message || 'An error occurred')
+            setError(friendlyAuthError(err))
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleReset = async () => {
+        setError('')
+        setInfo('')
+        if (!email.trim()) {
+            setError('Enter your email first, then tap "Forgot password".')
+            return
+        }
+        try {
+            await resetPassword(email)
+            setInfo('Password reset email sent.')
+        } catch (err) {
+            setError(friendlyAuthError(err))
         }
     }
 
@@ -54,20 +50,21 @@ function Login({ onLogin }) {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label htmlFor="username" className="block text-sm font-medium text-ink mb-1">
-                            Username
+                        <label htmlFor="email" className="block text-sm font-medium text-ink mb-1">
+                            Email
                         </label>
                         <input
-                            id="username"
-                            type="text"
-                            value={username}
+                            id="email"
+                            type="email"
+                            value={email}
                             onChange={(e) => {
-                                setUsername(e.target.value)
+                                setEmail(e.target.value)
                                 setError('')
                             }}
                             className="w-full px-4 py-2 border-2 border-line rounded-lg focus:border-ink outline-none text-ink"
-                            placeholder="admin"
-                            autoComplete="username"
+                            placeholder="you@example.com"
+                            autoComplete="email"
+                            required
                             autoFocus
                         />
                     </div>
@@ -85,8 +82,9 @@ function Login({ onLogin }) {
                                 setError('')
                             }}
                             className="w-full px-4 py-2 border-2 border-line rounded-lg focus:border-ink outline-none text-ink"
-                            placeholder="admin"
-                            autoComplete="current-password"
+                            autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+                            minLength={isRegisterMode ? 6 : undefined}
+                            required
                         />
                     </div>
 
@@ -95,30 +93,37 @@ function Login({ onLogin }) {
                             {error}
                         </div>
                     )}
+                    {info && (
+                        <div className="text-green-700 text-sm bg-green-50 border border-green-200 rounded-lg p-3">
+                            {info}
+                        </div>
+                    )}
 
                     <button
                         type="submit"
                         disabled={loading}
                         className="w-full bg-ink text-white py-3 rounded-lg font-medium hover:bg-ink/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {loading ? 'Please wait...' : (isRegisterMode ? 'Register' : 'Login')}
+                        {loading ? 'Please wait...' : (isRegisterMode ? 'Create account' : 'Login')}
                     </button>
                 </form>
 
-                <div className="mt-4 text-center">
+                <div className="mt-4 flex items-center justify-between text-sm">
                     <button
                         onClick={() => {
                             setIsRegisterMode(!isRegisterMode)
                             setError('')
+                            setInfo('')
                         }}
-                        className="text-sm text-ink/60 hover:text-ink underline"
+                        className="text-ink/60 hover:text-ink underline"
                     >
-                        {isRegisterMode ? 'Already have an account? Login' : 'New user? Register here'}
+                        {isRegisterMode ? 'Have an account? Login' : 'New here? Create account'}
                     </button>
-                </div>
-
-                <div className="mt-6 text-center text-xs text-ink/40">
-                    {isRegisterMode ? 'Create your encrypted account' : 'Login to access your encrypted data'}
+                    {!isRegisterMode && (
+                        <button onClick={handleReset} className="text-ink/60 hover:text-ink underline">
+                            Forgot password
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

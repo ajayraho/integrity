@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import ConfirmDialog from './ConfirmDialog'
 
-function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout }) {
+function NavigationButton({ currentView, onViewChange, onManageHabits, onBackup, onLogout, userEmail }) {
     const [showMenu, setShowMenu] = useState(false)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
@@ -17,7 +17,10 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
     return (
         <div className="fixed bottom-6 right-6 z-30">
             {showMenu && (
-                <div className="absolute bottom-16 right-0 bg-white border-2 border-line shadow-lg rounded-lg py-2 mb-2 min-w-[200px]">
+                <>
+                <div className="fixed inset-0" onClick={() => setShowMenu(false)} />
+                <div className="absolute bottom-16 right-0 bg-white border-2 border-line shadow-lg rounded-lg py-2 mb-2 min-w-[220px] max-h-[75vh] overflow-y-auto">
+                    {userEmail && <div className="px-4 pb-2 mb-1 text-xs text-ink/50 border-b border-line truncate">{userEmail}</div>}
                     {views.map(view => (
                         <button
                             key={view.id}
@@ -48,6 +51,17 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
 
                     <button
                         onClick={() => {
+                            onBackup()
+                            setShowMenu(false)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors flex items-center gap-2"
+                    >
+                        <span className="text-lg">💾</span>
+                        <span className="text-sm text-ink">Backup & Import</span>
+                    </button>
+
+                    <button
+                        onClick={() => {
                             window.location.reload()
                         }}
                         className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors flex items-center gap-2"
@@ -66,7 +80,7 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
                                     setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
                                 },
                                 title: 'Logout',
-                                message: 'Are you sure you want to logout? All your data is safely stored in the encrypted database.'
+                                message: 'Log out of Integrity on this device? Your data stays in your account.'
                             })
                         }}
                         className="w-full text-left px-4 py-2 hover:bg-red-50 transition-colors flex items-center gap-2 text-red-600"
@@ -75,6 +89,7 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onLogout 
                         <span className="text-sm">Logout</span>
                     </button>
                 </div>
+                </>
             )}
 
             <ConfirmDialog

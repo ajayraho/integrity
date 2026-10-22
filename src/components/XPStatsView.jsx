@@ -1,34 +1,23 @@
-import { useState, useEffect, useRef } from 'react'
-import { getTotalXP, getXPForMonth, getMedalForMonth, getAllMedals, getBadgesForDate, checkMonthlyMedals, BADGE_TYPES, MEDAL_TIERS, awardBadge, awardMedal, getAllBadges, deleteBadge, updateBadge, deleteMedal, updateMedal, createCustomBadge, createCustomMedal } from '../utils/storage'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+    getTotalXP, getXPForMonth, getMedalForMonth, getAllMedals, getBadgesForDate, checkMonthlyMedals,
+    BADGE_TYPES, MEDAL_TIERS, awardBadge, awardMedal, deleteBadge, updateBadge,
+    deleteMedal, updateMedal, createCustomBadge, createCustomMedal,
+} from '../utils/storage'
+import { useStoreVersion } from '../hooks/useStore'
+import { useFeedback } from '../hooks/useFeedback'
+import { toDateId, addMonths, daysInMonth } from '../utils/date'
+import { badgeColor as getColorForBadge } from '../utils/badgeColor'
 import ConfirmDialog from './ConfirmDialog'
 
-// Hash-based color generation (same as DateHeader)
-const getColorForBadge = (badgeName) => {
-    const colors = [
-        '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
-        '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788',
-        '#FF8FA3', '#C9ADA7', '#6C757D', '#A8DADC', '#E63946'
-    ]
+const GRAPH_W = 1000
+const GRAPH_H = 400
 
-    let hash = 0
-    for (let i = 0; i < badgeName.length; i++) {
-        hash = badgeName.charCodeAt(i) + ((hash << 5) - hash)
-    }
-
-    return colors[Math.abs(hash) % colors.length]
-}
-
-function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }) {
+function XPStatsView() {
+    const version = useStoreVersion()
+    const { showToast, showBadge, showMedal } = useFeedback()
     const canvasRef = useRef(null)
-    const [currentDate, setCurrentDate] = useState(new Date())
-    const [currentDay, setCurrentDay] = useState(new Date().getDate())
-    const [totalXP, setTotalXP] = useState(0)
-    const [monthlyData, setMonthlyData] = useState([])
-    const [stats, setStats] = useState({ max: 0, avg: 0, daysActive: 0 })
-    const [currentMedal, setCurrentMedal] = useState(null)
-    const [allMedals, setAllMedals] = useState([])
-    const [todayBadges, setTodayBadges] = useState([])
-    const [earnedBadges, setEarnedBadges] = useState([])
+    const [selectedDate, setSelectedDate] = useState(() => new Date())
     const [selectedBadge, setSelectedBadge] = useState(null)
     const [selectedMedal, setSelectedMedal] = useState(null)
     const [editingBadge, setEditingBadge] = useState({ icon: '', name: '', xp: 0, description: '' })
@@ -39,178 +28,80 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
     const [newMedal, setNewMedal] = useState({ icon: '', name: '', threshold: 0, description: '' })
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
-    useEffect(() => {
-        loadData()
-    }, [currentDate, currentDay])
+    // Kept for the JSX below
+    const currentDate = selectedDate
+    const year = selectedDate.getFullYear()
+    const month = selectedDate.getMonth() + 1
+    const selectedDateId = toDateId(selectedDate)
 
-    useEffect(() => {
-        if (monthlyData.length > 0 && canvasRef.current) {
-            drawGraph()
-        }
-    }, [monthlyData])
-
-    const loadData = () => {
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth() + 1
-
-        // Get total XP
-        const total = getTotalXP()
-        setTotalXP(total)
-
-        // Get monthly XP data
-        const data = getXPForMonth(year, month)
-
-        // Fill in missing days with 0 XP
-        const daysInMonth = new Date(year, month, 0).getDate()
-        const filledData = []
-
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
-            const existing = data.find(d => d.date === dateStr)
-            filledData.push({
-                date: dateStr,
-                day,
-                total: existing ? existing.total : 0
-            })
-        }
-
-        setMonthlyData(filledData)
-
-        // Calculate stats
-        const activeDays = filledData.filter(d => d.total > 0)
-        const maxXP = Math.max(...filledData.map(d => d.total), 0)
-        const avgXP = activeDays.length > 0
-            ? Math.round(activeDays.reduce((sum, d) => sum + d.total, 0) / activeDays.length)
-            : 0
-
-        setStats({
-            max: maxXP,
-            avg: avgXP,
-            daysActive: activeDays.length
-        })
-
-        // Get current month's medal
-        checkMonthlyMedals(year, month)
-        const medal = getMedalForMonth(year, month)
-        setCurrentMedal(medal)
-
-        // Get all medals
-        setAllMedals(getAllMedals())
-
-        // Get badges for the current selected day
-        const selectedDate = `${year}-${month.toString().padStart(2, '0')}-${currentDay.toString().padStart(2, '0')}`
-        setTodayBadges(getBadgesForDate(selectedDate))
-
-        // Get all earned badges
-        setEarnedBadges(getAllBadges())
+    // ---- derived data (recomputed on every store change) ----
+    const totalXP = getTotalXP()
+    const monthTotals = getXPForMonth(year, month)
+    const monthlyData = []
+    for (let day = 1; day <= daysInMonth(year, month - 1); day++) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        monthlyData.push({ date: dateStr, day, total: monthTotals.find(d => d.date === dateStr)?.total || 0 })
     }
+    const activeDays = monthlyData.filter(d => d.total > 0)
+    const stats = {
+        max: Math.max(0, ...monthlyData.map(d => d.total)),
+        avg: activeDays.length ? Math.round(activeDays.reduce((s, d) => s + d.total, 0) / activeDays.length) : 0,
+        daysActive: activeDays.length,
+    }
+    const currentMedal = getMedalForMonth(year, month)
+    const allMedals = getAllMedals()
+    const todayBadges = getBadgesForDate(selectedDateId)
+
+    // Catch up on medals for XP earned before medals existed (respects revoked medals)
+    useEffect(() => {
+        const medal = checkMonthlyMedals(year, month)
+        if (medal) showMedal(medal)
+    }, [year, month, version, showMedal])
+
+    const closeConfirm = () => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
 
     const handleBadgeDoubleClick = (badgeTypeKey) => {
-        const selectedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`
-
-        // Check if badge is already earned on this date
-        const existingBadge = earnedBadges.find(b => b.type === badgeTypeKey && b.date === selectedDate)
-
+        const existingBadge = todayBadges.find(b => b.type === badgeTypeKey)
         if (existingBadge) {
-            // Unachieve the badge - delete it
             const result = deleteBadge(existingBadge.id)
-            if (result.success) {
-                loadData()
-                if (showXPLoss) {
-                    showXPLoss(`${existingBadge.xpBoost} (Badge unachieved)`)
-                }
-            } else {
-                if (showXPLoss) {
-                    showXPLoss('Error unachieving badge: ' + result.error)
-                }
-            }
+            if (result.success) showToast(`Badge removed (−${existingBadge.xpBoost} XP)`, 'info')
+            else showToast('Could not remove badge: ' + result.error, 'error')
         } else {
-            // Award the badge
-            const badge = awardBadge(badgeTypeKey, selectedDate)
-            if (badge) {
-                loadData() // Reload to show the new badge
-                // Trigger badge animation
-                if (showBadge) {
-                    showBadge(badge)
-                }
-            } else {
-                if (showXPLoss) {
-                    showXPLoss('Error awarding badge!')
-                }
-            }
+            const badge = awardBadge(badgeTypeKey, selectedDateId)
+            if (badge) showBadge(badge)
+            else showToast('Could not award badge', 'error')
         }
     }
 
     const handleMedalDoubleClick = (tierKey) => {
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth() + 1
-
-        // Check if medal is already earned for this month/year
         const existingMedal = allMedals.find(m => m.tier === tierKey && m.year === year && m.month === month)
-
         if (existingMedal) {
-            // Unachieve the medal - delete it (no XP deduction)
             const result = deleteMedal(existingMedal.id)
-            if (result.success) {
-                loadData()
-                if (showToast) {
-                    showToast('Medal unachieved!', 'success', 2500)
-                }
-            } else {
-                if (showXPLoss) {
-                    showXPLoss('Error unachieving medal: ' + result.error)
-                }
-            }
+            if (result.success) showToast('Medal removed', 'info')
+            else showToast('Could not remove medal: ' + result.error, 'error')
         } else {
-            // Award the medal
             const medal = awardMedal(tierKey, year, month)
-            if (medal) {
-                loadData() // Reload to show the new medal
-                // Trigger medal animation
-                if (showMedal) {
-                    const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                    showMedal(medal, monthName)
-                }
-            } else {
-                if (showXPLoss) {
-                    showXPLoss('Error awarding medal!')
-                }
-            }
+            if (medal) showMedal(medal)
+            else showToast('Could not award medal', 'error')
         }
     }
 
-    const isBadgeEarned = (badgeTypeKey) => {
-        const selectedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`
-        return earnedBadges.some(b => b.type === badgeTypeKey && b.date === selectedDate)
-    }
+    const isBadgeEarned = (badgeTypeKey) => todayBadges.some(b => b.type === badgeTypeKey)
 
-    const isMedalEarned = (tierKey) => {
-        const selectedYear = currentDate.getFullYear()
-        const selectedMonth = currentDate.getMonth() + 1
-        return allMedals.some(m => m.tier === tierKey && m.year === selectedYear && m.month === selectedMonth)
-    }
+    const isMedalEarned = (tierKey) => allMedals.some(m => m.tier === tierKey && m.year === year && m.month === month)
 
     const handleBadgeRightClick = (e, badge) => {
         e.preventDefault()
         setSelectedBadge(badge)
-        setEditingBadge({
-            icon: badge.icon,
-            name: badge.name,
-            xp: badge.xpBoost,
-            description: badge.description || ''
-        })
+        setEditingBadge({ icon: badge.icon, name: badge.name, xp: badge.xpBoost, description: badge.description || '' })
     }
 
     const handleMedalRightClick = (e, medal) => {
         e.preventDefault()
         setSelectedMedal(medal)
         setEditingMedal({
-            icon: medal.icon,
-            name: medal.name,
-            threshold: medal.threshold,
-            description: medal.description || '',
-            year: medal.year,
-            month: medal.month
+            icon: medal.icon, name: medal.name, threshold: medal.threshold,
+            description: medal.description || '', year: medal.year, month: medal.month,
         })
     }
 
@@ -222,17 +113,12 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             action: () => {
                 const result = deleteBadge(badgeId)
                 if (result.success) {
-                    loadData()
                     setSelectedBadge(null)
-                    if (showXPGain) {
-                        showXPGain('Badge deleted successfully')
-                    }
+                    showToast('Badge deleted', 'info')
                 } else {
-                    if (showXPLoss) {
-                        showXPLoss('Error deleting badge: ' + result.error)
-                    }
+                    showToast('Could not delete badge: ' + result.error, 'error')
                 }
-                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+                closeConfirm()
             }
         })
     }
@@ -245,162 +131,99 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             action: () => {
                 const result = deleteMedal(medalId)
                 if (result.success) {
-                    loadData()
                     setSelectedMedal(null)
-                    if (showXPGain) {
-                        showXPGain('Medal deleted successfully')
-                    }
+                    showToast('Medal deleted', 'info')
                 } else {
-                    if (showXPLoss) {
-                        showXPLoss('Error deleting medal: ' + result.error)
-                    }
+                    showToast('Could not delete medal: ' + result.error, 'error')
                 }
-                setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
+                closeConfirm()
             }
         })
     }
 
     const handleUpdateBadge = () => {
         if (!editingBadge.icon || !editingBadge.name || editingBadge.xp <= 0) {
-            if (showXPLoss) {
-                showXPLoss('Please fill all fields correctly')
-            }
+            showToast('Please fill all fields (XP must be above 0)', 'error')
             return
         }
-
         const result = updateBadge(selectedBadge.id, {
-            icon: editingBadge.icon,
-            name: editingBadge.name,
-            xpBoost: editingBadge.xp,
-            description: editingBadge.description
+            icon: editingBadge.icon, name: editingBadge.name,
+            xpBoost: editingBadge.xp, description: editingBadge.description,
         })
-
         if (result.success) {
-            loadData()
             setSelectedBadge(null)
             setEditingBadge({ icon: '', name: '', xp: 0, description: '' })
-            if (showXPGain) {
-                showXPGain('Badge updated successfully')
-            }
+            showToast('Badge updated')
         } else {
-            if (showXPLoss) {
-                showXPLoss('Error updating badge: ' + result.error)
-            }
+            showToast('Could not update badge: ' + result.error, 'error')
         }
     }
 
     const handleUpdateMedal = () => {
         if (!editingMedal.icon || !editingMedal.name || editingMedal.threshold <= 0) {
-            if (showXPLoss) {
-                showXPLoss('Please fill all fields correctly')
-            }
+            showToast('Please fill all fields (threshold must be above 0)', 'error')
             return
         }
-
         const result = updateMedal(selectedMedal.id, {
-            icon: editingMedal.icon,
-            name: editingMedal.name,
-            threshold: editingMedal.threshold,
-            description: editingMedal.description
+            icon: editingMedal.icon, name: editingMedal.name,
+            threshold: editingMedal.threshold, description: editingMedal.description,
         })
-
         if (result.success) {
-            loadData()
             setSelectedMedal(null)
             setEditingMedal({ icon: '', name: '', threshold: 0, description: '', year: 0, month: 0 })
-            if (showXPGain) {
-                showXPGain('Medal updated successfully')
-            }
+            showToast('Medal updated')
         } else {
-            if (showXPLoss) {
-                showXPLoss('Error updating medal: ' + result.error)
-            }
+            showToast('Could not update medal: ' + result.error, 'error')
         }
     }
 
     const handleCreateBadge = () => {
         if (!newBadge.icon || !newBadge.name || newBadge.xp <= 0) {
-            if (showXPLoss) {
-                showXPLoss('Please fill all fields correctly')
-            }
+            showToast('Please fill all fields (XP must be above 0)', 'error')
             return
         }
-
-        const selectedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`
         const badge = createCustomBadge({
-            name: newBadge.name,
-            icon: newBadge.icon,
-            xpBoost: newBadge.xp,
-            description: newBadge.description
-        }, selectedDate)
-
-        if (badge) {
-            loadData()
-            setShowCreateBadge(false)
-            setNewBadge({ icon: '', name: '', xp: 0, description: '' })
-            if (showBadge) {
-                showBadge(badge)
-            }
-        } else {
-            if (showXPLoss) {
-                showXPLoss('Error creating badge')
-            }
-        }
+            name: newBadge.name, icon: newBadge.icon, xpBoost: newBadge.xp, description: newBadge.description,
+        }, selectedDateId)
+        setShowCreateBadge(false)
+        setNewBadge({ icon: '', name: '', xp: 0, description: '' })
+        showBadge(badge)
     }
 
     const handleCreateMedal = () => {
         if (!newMedal.icon || !newMedal.name || newMedal.threshold <= 0) {
-            if (showXPLoss) {
-                showXPLoss('Please fill all fields correctly')
-            }
+            showToast('Please fill all fields (threshold must be above 0)', 'error')
             return
         }
-
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth() + 1
         const medal = createCustomMedal({
-            name: newMedal.name,
-            icon: newMedal.icon,
-            threshold: newMedal.threshold,
-            description: newMedal.description
+            name: newMedal.name, icon: newMedal.icon, threshold: newMedal.threshold, description: newMedal.description,
         }, year, month)
-
-        if (medal) {
-            loadData()
-            setShowCreateMedal(false)
-            setNewMedal({ icon: '', name: '', threshold: 0, description: '' })
-            if (showMedal) {
-                const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                showMedal(medal, monthName)
-            }
-        } else {
-            if (showXPLoss) {
-                showXPLoss('Error creating medal')
-            }
-        }
+        setShowCreateMedal(false)
+        setNewMedal({ icon: '', name: '', threshold: 0, description: '' })
+        showMedal(medal)
     }
 
-    const drawGraph = () => {
+    const drawGraph = useCallback((data) => {
         const canvas = canvasRef.current
-        if (!canvas) return
+        if (!canvas || !data.length) return
 
+        // Sharp on high-DPI screens
+        const dpr = window.devicePixelRatio || 1
+        canvas.width = GRAPH_W * dpr
+        canvas.height = GRAPH_H * dpr
         const ctx = canvas.getContext('2d')
-        const width = canvas.width
-        const height = canvas.height
-
-        // Clear canvas
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        const width = GRAPH_W
+        const height = GRAPH_H
         ctx.clearRect(0, 0, width, height)
 
-        // Styling
         const padding = 60
         const graphWidth = width - padding * 2
         const graphHeight = height - padding * 2
-
-        // Get max value for scaling
-        const maxValue = Math.max(...monthlyData.map(d => d.total), 10)
+        const maxValue = Math.max(...data.map(d => d.total), 10)
         const yScale = graphHeight / maxValue
+        const xAt = (index) => padding + (graphWidth / Math.max(data.length - 1, 1)) * index
 
-        // Draw grid lines
         ctx.strokeStyle = '#e0e0e0'
         ctx.lineWidth = 1
         const gridLines = 5
@@ -410,8 +233,6 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             ctx.moveTo(padding, y)
             ctx.lineTo(width - padding, y)
             ctx.stroke()
-
-            // Y-axis labels
             const value = Math.round(maxValue - (maxValue / gridLines) * i)
             ctx.fillStyle = '#666'
             ctx.font = '12px sans-serif'
@@ -419,36 +240,24 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             ctx.fillText(value.toString(), padding - 10, y + 4)
         }
 
-        // Draw line graph
         ctx.strokeStyle = '#2C3E50'
         ctx.lineWidth = 3
         ctx.beginPath()
-
-        monthlyData.forEach((point, index) => {
-            const x = padding + (graphWidth / (monthlyData.length - 1)) * index
+        data.forEach((point, index) => {
+            const x = xAt(index)
             const y = height - padding - point.total * yScale
-
-            if (index === 0) {
-                ctx.moveTo(x, y)
-            } else {
-                ctx.lineTo(x, y)
-            }
+            if (index === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
         })
-
         ctx.stroke()
 
-        // Draw data points
-        monthlyData.forEach((point, index) => {
-            const x = padding + (graphWidth / (monthlyData.length - 1)) * index
+        data.forEach((point, index) => {
+            const x = xAt(index)
             const y = height - padding - point.total * yScale
-
-            // Draw point
             ctx.fillStyle = point.total > 0 ? '#4CAF50' : '#ccc'
             ctx.beginPath()
             ctx.arc(x, y, 5, 0, 2 * Math.PI)
             ctx.fill()
-
-            // Draw X-axis labels (every 5 days)
             if (point.day % 5 === 0 || point.day === 1) {
                 ctx.fillStyle = '#666'
                 ctx.font = '11px sans-serif'
@@ -457,84 +266,57 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
             }
         })
 
-        // Draw today indicator
-        const today = new Date()
-        if (today.getMonth() === currentDate.getMonth() && today.getFullYear() === currentDate.getFullYear()) {
-            const todayDay = today.getDate()
-            const todayIndex = monthlyData.findIndex(d => d.day === todayDay)
-            if (todayIndex !== -1) {
-                const x = padding + (graphWidth / (monthlyData.length - 1)) * todayIndex
-                ctx.strokeStyle = '#FF5722'
-                ctx.lineWidth = 2
-                ctx.setLineDash([5, 5])
-                ctx.beginPath()
-                ctx.moveTo(x, padding)
-                ctx.lineTo(x, height - padding)
-                ctx.stroke()
-                ctx.setLineDash([])
-
-                // Label
-                ctx.fillStyle = '#FF5722'
-                ctx.font = 'bold 12px sans-serif'
-                ctx.textAlign = 'center'
-                ctx.fillText('TODAY', x, padding - 10)
-            }
+        const todayStr = toDateId(new Date())
+        const todayIndex = data.findIndex(d => d.date === todayStr)
+        if (todayIndex !== -1) {
+            const x = xAt(todayIndex)
+            ctx.strokeStyle = '#FF5722'
+            ctx.lineWidth = 2
+            ctx.setLineDash([5, 5])
+            ctx.beginPath()
+            ctx.moveTo(x, padding)
+            ctx.lineTo(x, height - padding)
+            ctx.stroke()
+            ctx.setLineDash([])
+            ctx.fillStyle = '#FF5722'
+            ctx.font = 'bold 12px sans-serif'
+            ctx.textAlign = 'center'
+            ctx.fillText('TODAY', x, padding - 10)
         }
 
-        // X-axis title
         ctx.fillStyle = '#333'
         ctx.font = '14px sans-serif'
         ctx.textAlign = 'center'
         ctx.fillText('Day of Month', width / 2, height - 10)
-
-        // Y-axis title
         ctx.save()
         ctx.translate(20, height / 2)
         ctx.rotate(-Math.PI / 2)
         ctx.fillText('XP Points', 0, 0)
         ctx.restore()
-    }
+    }, [])
+
+    const graphKey = monthlyData.map(d => d.total).join(',') + '|' + year + '-' + month
+    useEffect(() => {
+        drawGraph(monthlyData)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graphKey, drawGraph])
 
     const changeMonth = (delta) => {
-        const newDate = new Date(currentDate)
-        newDate.setMonth(newDate.getMonth() + delta)
-        setCurrentDate(newDate)
-        setCurrentDay(1) // Reset to first day of new month
+        // Clamp the day (31 Oct -> 30 Nov, not 1 Dec)
+        setSelectedDate(prev => addMonths(prev, delta))
     }
 
     const changeDay = (delta) => {
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth()
-        const daysInMonth = new Date(year, month + 1, 0).getDate()
-
-        let newDay = currentDay + delta
-        let newDate = new Date(currentDate)
-
-        // Handle going to previous month
-        if (newDay < 1) {
-            newDate.setMonth(month - 1)
-            const prevMonthDays = new Date(year, month, 0).getDate()
-            newDay = prevMonthDays
-            setCurrentDate(newDate)
-        }
-        // Handle going to next month
-        else if (newDay > daysInMonth) {
-            newDate.setMonth(month + 1)
-            newDay = 1
-            setCurrentDate(newDate)
-        }
-
-        setCurrentDay(newDay)
+        setSelectedDate(prev => {
+            const d = new Date(prev)
+            d.setDate(d.getDate() + delta)
+            return d
+        })
     }
 
-    const formatMonthYear = () => {
-        return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    }
+    const formatMonthYear = () => currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
-    const formatCurrentDate = () => {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDay)
-        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-    }
+    const formatCurrentDate = () => currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
     return (
         <div className="xp-stats-view min-h-screen bg-paper py-8 px-4">
@@ -595,6 +377,30 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                     </button>
                 </div>
 
+                {/* Badges earned on the selected day (includes custom badges) */}
+                <div className="bg-white border-2 border-line rounded-lg p-4 mb-8">
+                    <h3 className="text-lg font-bold text-ink mb-3">Badges on {formatCurrentDate()}</h3>
+                    {todayBadges.length === 0 ? (
+                        <p className="text-sm text-ink/60">None yet.</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-3">
+                            {todayBadges.map(b => (
+                                <button
+                                    key={b.id}
+                                    onClick={(e) => handleBadgeRightClick(e, b)}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-full text-white shadow"
+                                    style={{ backgroundColor: getColorForBadge(b.name) }}
+                                    title="Edit or delete"
+                                >
+                                    <span className="text-lg">{b.icon}</span>
+                                    <span className="text-sm font-semibold">{b.name}</span>
+                                    <span className="text-xs opacity-90">+{b.xpBoost}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
                 {/* All Badges Gallery */}
                 <div className="bg-white border-2 border-line rounded-lg shadow-lg p-6 mb-8">
                     <div className="flex items-center justify-between mb-4">
@@ -607,13 +413,13 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                             +
                         </button>
                     </div>
-                    <p className="text-sm text-ink/60 mb-4">Double-click to award • Click dot to view/delete</p>
+                    <p className="text-sm text-ink/60 mb-4">Double-click to award/remove for the selected day • Click dot to edit</p>
                     <div className="overflow-x-auto pb-2">
                         <div className="flex gap-4 min-w-min">
                             {Object.entries(BADGE_TYPES).map(([key, badge]) => {
                                 const isEarned = isBadgeEarned(key)
                                 const bgColor = getColorForBadge(badge.name)
-                                const earnedBadge = earnedBadges.find(b => b.type === key)
+                                const earnedBadge = todayBadges.find(b => b.type === key)
 
                                 return (
                                     <div
@@ -668,12 +474,12 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                             +
                         </button>
                     </div>
-                    <p className="text-sm text-ink/60 mb-4">Double-click to award • Click dot to view/delete</p>
+                    <p className="text-sm text-ink/60 mb-4">Double-click to award/remove for this month • Click dot to edit</p>
                     <div className="overflow-x-auto pb-2">
                         <div className="flex gap-4 min-w-min">
                             {Object.entries(MEDAL_TIERS).map(([key, medal]) => {
                                 const isEarned = isMedalEarned(key)
-                                const earnedMedal = allMedals.find(m => m.tier === key)
+                                const earnedMedal = allMedals.find(m => m.tier === key && m.year === year && m.month === month)
 
                                 return (
                                     <div
@@ -742,9 +548,9 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                     <div className="overflow-x-auto">
                         <canvas
                             ref={canvasRef}
-                            width={1000}
-                            height={400}
-                            className="w-full"
+                            width={GRAPH_W}
+                            height={GRAPH_H}
+                            className="w-full min-w-[600px]"
                         />
                     </div>
                 </div>
@@ -1054,7 +860,7 @@ function XPStatsView({ showXPGain, showXPLoss, showToast, showBadge, showMedal }
                 title={confirmDialog.title}
                 message={confirmDialog.message}
                 onConfirm={confirmDialog.action}
-                onCancel={() => setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })}
+                onCancel={closeConfirm}
                 confirmStyle="danger"
             />
         </div>

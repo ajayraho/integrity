@@ -1,33 +1,36 @@
-import { useState, useEffect } from 'react'
-import { loadEntries } from '../utils/storage'
+import { useState } from 'react'
+import { getAllDays, dayHasContent, loadHabits } from '../utils/storage'
+import { useStoreVersion } from '../hooks/useStore'
+import { fromDateId, toDateId, todayId } from '../utils/date'
 
-function TimelineView() {
-    const [entries, setEntries] = useState([])
+function TimelineView({ onOpenDay }) {
+    useStoreVersion()
     const [filter, setFilter] = useState('all') // all, week, month, year
-
-    useEffect(() => {
-        const allEntries = loadEntries()
-        setEntries(allEntries.sort((a, b) => new Date(b.date) - new Date(a.date)))
-    }, [])
+    const habitsById = new Map(loadHabits().map(h => [h.id, h]))
+    const today = todayId()
+    // Newest first; future days only show if something was written there
+    const entries = getAllDays()
+        .map(d => ({ ...d, date: fromDateId(d.id) }))
+        .sort((a, b) => b.id.localeCompare(a.id))
 
     const getFilteredEntries = () => {
-        const today = new Date(2026, 1, 8) // Feb 8, 2026
+        const today = new Date()
 
         switch (filter) {
             case 'week': {
                 const weekAgo = new Date(today)
                 weekAgo.setDate(today.getDate() - 7)
-                return entries.filter(entry => new Date(entry.date) >= weekAgo)
+                return entries.filter(entry => entry.id >= toDateId(weekAgo))
             }
             case 'month': {
                 const monthAgo = new Date(today)
                 monthAgo.setMonth(today.getMonth() - 1)
-                return entries.filter(entry => new Date(entry.date) >= monthAgo)
+                return entries.filter(entry => entry.id >= toDateId(monthAgo))
             }
             case 'year': {
                 const yearAgo = new Date(today)
                 yearAgo.setFullYear(today.getFullYear() - 1)
-                return entries.filter(entry => new Date(entry.date) >= yearAgo)
+                return entries.filter(entry => entry.id >= toDateId(yearAgo))
             }
             default:
                 return entries
@@ -45,11 +48,9 @@ function TimelineView() {
     }
 
     const getRelativeTime = (date) => {
-        const d = new Date(date)
-        const today = new Date(2026, 1, 8) // Feb 8, 2026
-        const diffTime = today - d
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+        const diffDays = Math.round((fromDateId(today) - new Date(date)) / (1000 * 60 * 60 * 24))
 
+        if (diffDays < 0) return diffDays === -1 ? 'Tomorrow' : `In ${-diffDays} days`
         if (diffDays === 0) return 'Today'
         if (diffDays === 1) return 'Yesterday'
         if (diffDays < 7) return `${diffDays} days ago`
@@ -58,10 +59,7 @@ function TimelineView() {
         return `${Math.floor(diffDays / 365)} years ago`
     }
 
-    const hasContent = (entry) => {
-        return entry.lines.some(line => line.content.trim() !== '') ||
-            Object.keys(entry.habits || {}).length > 0
-    }
+    const hasContent = dayHasContent
 
     const filteredEntries = getFilteredEntries().filter(hasContent)
 
@@ -101,13 +99,16 @@ function TimelineView() {
                         <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-line" />
 
                         <div className="space-y-8">
-                            {filteredEntries.map((entry, index) => (
+                            {filteredEntries.map((entry) => (
                                 <div key={entry.id} className="relative pl-20">
                                     {/* Timeline Dot */}
                                     <div className="absolute left-6 top-6 w-5 h-5 rounded-full bg-ink border-4 border-paper" />
 
                                     {/* Entry Card */}
-                                    <div className="bg-white border-2 border-line rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+                                    <div
+                                        className="bg-white border-2 border-line rounded-lg shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow cursor-pointer"
+                                        onClick={() => onOpenDay?.(entry.id)}
+                                    >
                                         <div className="flex items-start justify-between mb-3">
                                             <div>
                                                 <h3 className="text-lg font-bold text-ink">
@@ -118,19 +119,19 @@ function TimelineView() {
                                         </div>
 
                                         {/* Content */}
-                                        {entry.lines.filter(line => line.content.trim() !== '').length > 0 && (
+                                        {entry.lines.filter(line => (line.content || '').trim() !== '').length > 0 && (
                                             <div className="mb-4">
                                                 <div className="space-y-2">
                                                     {entry.lines
-                                                        .filter(line => line.content.trim() !== '')
+                                                        .filter(line => (line.content || '').trim() !== '')
                                                         .slice(0, 3)
                                                         .map(line => (
                                                             <div
                                                                 key={line.id}
                                                                 className="flex items-start gap-2 text-ink"
                                                             >
-                                                                {line.type === 'checkbox' && (
-                                                                    <span className="text-lg">☐</span>
+                                                                {(line.type === 'checkbox' || line.type === 'checkbox-time') && (
+                                                                    <span className="text-lg">{line.checked ? '☑' : '☐'}</span>
                                                                 )}
                                                                 {line.type === 'radio' && (
                                                                     <span className="text-lg">○</span>
@@ -138,9 +139,9 @@ function TimelineView() {
                                                                 <span className="flex-1">{line.content}</span>
                                                             </div>
                                                         ))}
-                                                    {entry.lines.filter(line => line.content.trim() !== '').length > 3 && (
+                                                    {entry.lines.filter(line => (line.content || '').trim() !== '').length > 3 && (
                                                         <p className="text-sm text-ink/60 italic">
-                                                            +{entry.lines.filter(line => line.content.trim() !== '').length - 3} more lines
+                                                            +{entry.lines.filter(line => (line.content || '').trim() !== '').length - 3} more lines
                                                         </p>
                                                     )}
                                                 </div>
@@ -151,14 +152,15 @@ function TimelineView() {
                                         {Object.keys(entry.habits || {}).length > 0 && (
                                             <div className="flex flex-wrap gap-2 mt-3">
                                                 {Object.entries(entry.habits).map(([habitId, value]) => {
-                                                    if (!value || value === false || value === '') return null
+                                                    if (value === '' || value === false || value == null) return null
+                                                    const habit = habitsById.get(habitId)
                                                     return (
                                                         <div
                                                             key={habitId}
                                                             className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium flex items-center gap-1"
                                                         >
-                                                            <span>✓</span>
-                                                            <span>{typeof value === 'boolean' ? 'Completed' : value}</span>
+                                                            <span>{habit?.icon || '✓'}</span>
+                                                            <span>{habit?.name || 'Habit'}{value === true || value === 'true' ? '' : `: ${value}`}</span>
                                                         </div>
                                                     )
                                                 })}
