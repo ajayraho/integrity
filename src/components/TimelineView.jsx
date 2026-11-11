@@ -67,14 +67,14 @@ function TimelineView({ onOpenDay }) {
         <div className="timeline-view h-screen overflow-auto bg-paper p-4 md:p-8">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-8">
                     <h1 className="text-3xl font-bold text-ink">Timeline</h1>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         {['all', 'week', 'month', 'year'].map(f => (
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
-                                className={`px-4 py-2 rounded-lg border-2 transition-all ${filter === f
+                                className={`px-3 py-1.5 text-sm rounded-lg border-2 transition-all ${filter === f
                                         ? 'bg-ink text-white border-ink'
                                         : 'bg-white text-ink border-line hover:border-ink'
                                     }`}

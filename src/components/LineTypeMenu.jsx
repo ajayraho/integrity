@@ -15,10 +15,10 @@ function LineTypeMenu({ currentType, hasContent, allowReminder = true, onSelect,
     }, [onClose])
 
     const options = [
-        { type: 'text', label: 'Plain Text', icon: '📝' },
-        { type: 'checkbox', label: 'Checkbox', icon: '☐' },
-        { type: 'checkbox-time', label: 'Checkbox + Time', icon: '⏰' },
-        { type: 'radio', label: 'Radio Button', icon: '◯' },
+        { type: 'text', label: 'Text', icon: '📝' },
+        { type: 'checkbox', label: 'Quest', icon: '☐' },
+        { type: 'checkbox-time', label: 'Timed Quest', icon: '⏰' },
+        { type: 'radio', label: 'Option (pick one)', icon: '◯' },
     ]
 
     return (

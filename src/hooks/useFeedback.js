@@ -7,7 +7,7 @@ export const FeedbackContext = createContext({
     showXPLoss: () => {},
     showBadge: () => {},
     showMedal: () => {},
-    celebrate: () => {},
+    act: (_dayId, fn) => fn(),
 })
 
 export const useFeedback = () => useContext(FeedbackContext)

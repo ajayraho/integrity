@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { saveTemplate } from '../utils/storage'
+import { templateLine } from '../utils/lineOps'
 
-function TemplateMenu({ lines, onClose, onBrowse, onClear }) {
+function TemplateMenu({ lines, onClose, onBrowse, onClear, streakResetLabel, onStreakReset }) {
     const menuRef = useRef(null)
     const [showNameInput, setShowNameInput] = useState(false)
     const [templateName, setTemplateName] = useState('')
@@ -25,7 +26,7 @@ function TemplateMenu({ lines, onClose, onBrowse, onClear }) {
             name: templateName.trim(),
             isDefault: setAsDefault,
             // Keep structure + text as placeholders; drop per-day state (checks, XP, times)
-            lines: lines.map(line => ({ type: line.type, content: line.content || '' })),
+            lines: lines.map(line => templateLine(line)),
         })
         onClose()
     }
@@ -95,6 +96,14 @@ function TemplateMenu({ lines, onClose, onBrowse, onClear }) {
                     >
                         🗑️ Clear this page
                     </button>
+                    {streakResetLabel && (
+                        <button
+                            onClick={onStreakReset}
+                            className="w-full text-left px-4 py-2 hover:bg-line/30 transition-colors text-sm text-ink"
+                        >
+                            🔁 {streakResetLabel}
+                        </button>
+                    )}
                 </div>
             )}
         </div>

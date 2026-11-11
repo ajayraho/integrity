@@ -32,5 +32,13 @@ export function selectRadio(lines, lineId) {
 /** Template lines -> fresh day lines with new ids. */
 export function linesFromTemplate(template) {
     const src = template?.lines?.length ? template.lines : [{ type: 'text', content: '' }]
-    return src.map(l => ({ id: uid(), type: l.type || 'text', content: l.content || '' }))
+    return src.map(l => templateLine(l, uid()))
+}
+
+/** Copy a line's structure (and quest settings), dropping per-day state. */
+export function templateLine(l, id) {
+    const out = { id, type: l.type || 'text', content: l.content || '' }
+    if (l.xp !== undefined && l.xp !== null) out.xp = l.xp
+    if (l.materiaId) out.materiaId = l.materiaId
+    return out
 }

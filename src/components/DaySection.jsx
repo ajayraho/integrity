@@ -1,12 +1,10 @@
-import { useState } from 'react'
 import EditableLine from './EditableLine'
 import { focusLine } from '../utils/focus'
 import DateHeader from './DateHeader'
 import HabitsSection from './HabitsSection'
-import XPPromptModal from './XPPromptModal'
 import { useStoreVersion } from '../hooks/useStore'
 import { useFeedback } from '../hooks/useFeedback'
-import { getDayOrDefault, saveDay, lineXP, getRemindersForLine, deleteRemindersForLine } from '../utils/storage'
+import { getDayOrDefault, saveDay, getRemindersForLine, deleteRemindersForLine } from '../utils/storage'
 import { insertAfter, patchLine, removeLine, selectRadio, linesFromTemplate, newLine } from '../utils/lineOps'
 import { formatLongDate } from '../utils/date'
 
@@ -25,16 +23,12 @@ const RULED_BACKGROUND = {
 
 function DaySection({ dayId, isToday, autoFocus }) {
     useStoreVersion() // re-render on any data change (local or from another device)
-    const { celebrate } = useFeedback()
-    const [xpPromptLine, setXpPromptLine] = useState(null)
+    const { act } = useFeedback()
 
     const day = getDayOrDefault(dayId)
     const lines = day.lines?.length ? day.lines : [{ id: `${dayId}-1`, type: 'text', content: '' }]
 
     const setLines = (newLines) => saveDay(dayId, { lines: newLines })
-
-    // XP removed with these lines (if any were completed tasks)
-    const xpOf = (ls) => ls.reduce((s, l) => s + lineXP(l), 0)
 
     const addLine = (index) => {
         const line = newLine()
@@ -44,47 +38,30 @@ function DaySection({ dayId, isToday, autoFocus }) {
 
     const updateLine = (lineId, patch) => setLines(patchLine(lines, lineId, patch))
 
+    // act() compares XP / levels before and after, and shows the right feedback
     const deleteLine = (index) => {
         if (lines.length === 1) return
         const line = lines[index]
-        const lost = lineXP(line)
-        setLines(removeLine(lines, line.id))
+        act(dayId, () => setLines(removeLine(lines, line.id)))
         deleteRemindersForLine(line.id)
-        if (lost) celebrate(-lost, dayId)
         const target = index > 0 ? lines[index - 1] : lines[1]
         focusLine(target.id, index > 0)
     }
 
     const toggleCheck = (line, checked) => {
-        if (checked) {
-            setXpPromptLine(line)
-        } else {
-            const lost = lineXP(line)
-            updateLine(line.id, { checked: false })
-            if (lost) celebrate(-lost, dayId)
-        }
-    }
-
-    const confirmXP = (xp) => {
-        const line = xpPromptLine
-        setXpPromptLine(null)
-        if (!line) return
-        updateLine(line.id, { checked: true, xp, completedAt: new Date().toISOString() })
-        celebrate(xp, dayId)
+        act(dayId, () => updateLine(line.id, checked
+            ? { checked: true, completedAt: new Date().toISOString() }
+            : { checked: false, completedAt: null }))
     }
 
     const changeType = (line, type) => {
-        const stillTask = type === 'checkbox' || type === 'checkbox-time'
-        const lost = stillTask ? 0 : lineXP(line)
-        updateLine(line.id, stillTask ? { type } : { type, checked: false })
-        if (lost) celebrate(-lost, dayId)
+        const stillQuest = type === 'checkbox' || type === 'checkbox-time'
+        act(dayId, () => updateLine(line.id, stillQuest ? { type } : { type, checked: false }))
     }
 
     const applyTemplate = (template) => {
-        const lost = xpOf(lines)
         lines.forEach(l => deleteRemindersForLine(l.id))
-        setLines(linesFromTemplate(template))
-        if (lost) celebrate(-lost, dayId)
+        act(dayId, () => setLines(linesFromTemplate(template)))
     }
 
     return (
@@ -114,6 +91,7 @@ function DaySection({ dayId, isToday, autoFocus }) {
                         onToggleCheck={(checked) => toggleCheck(line, checked)}
                         onSelectRadio={() => setLines(selectRadio(lines, line.id))}
                         onTypeChange={(type) => changeType(line, type)}
+                        onQuestChange={(patch) => act(dayId, () => updateLine(line.id, patch))}
                         autoFocus={autoFocus && index === 0}
                     />
                 ))}
@@ -121,13 +99,6 @@ function DaySection({ dayId, isToday, autoFocus }) {
 
             <HabitsSection dayId={dayId} />
 
-            {xpPromptLine && <XPPromptModal
-                key={xpPromptLine.id}
-                isOpen
-                onConfirm={confirmXP}
-                onCancel={() => setXpPromptLine(null)}
-                defaultValue={Number(xpPromptLine?.xp) || 10}
-            />}
         </div>
     )
 }

@@ -86,3 +86,17 @@ body {
   color: rgba(44, 62, 80, 0.35);
   pointer-events: none;
 }
+
+/* Materia orbs */
+.materia-orb--glow {
+  box-shadow: 0 0 4px var(--orb-color), 0 0 8px color-mix(in srgb, var(--orb-color) 60%, transparent);
+  animation: materia-pulse 2.4s ease-in-out infinite;
+}
+@keyframes materia-pulse {
+  0%, 100% { box-shadow: 0 0 3px var(--orb-color), 0 0 6px color-mix(in srgb, var(--orb-color) 50%, transparent); }
+  50% { box-shadow: 0 0 6px var(--orb-color), 0 0 12px color-mix(in srgb, var(--orb-color) 70%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .materia-orb--glow { animation: none; }
+}
+

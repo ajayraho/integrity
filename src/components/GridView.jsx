@@ -150,10 +150,10 @@ function GridView({ onOpenDay }) {
 
                 {/* Grid */}
                 <div className="bg-white border-2 border-line rounded-lg shadow-lg p-4">
-                    <div className={`grid ${viewMode === 'week' ? 'grid-cols-7' : 'grid-cols-7'} gap-3`}>
-                        {/* Day names */}
+                    <div className={`grid ${viewMode === 'week' ? 'grid-cols-1 sm:grid-cols-7' : 'grid-cols-7'} gap-1.5 sm:gap-3`}>
+                        {/* Day names (week view on phones shows them inside each row instead) */}
                         {dayNames.map(day => (
-                            <div key={day} className="text-center font-semibold text-ink/60 text-sm py-2">
+                            <div key={day} className={`text-center font-semibold text-ink/60 text-xs sm:text-sm py-2 ${viewMode === 'week' ? 'hidden sm:block' : ''}`}>
                                 {day}
                             </div>
                         ))}
@@ -173,14 +173,15 @@ function GridView({ onOpenDay }) {
                                     key={toDateId(date)}
                                     onClick={() => onOpenDay?.(toDateId(date))}
                                     className={`
-                                        border-2 rounded-lg p-2 sm:p-3 transition-all cursor-pointer min-w-0
+                                        border-2 rounded-lg p-1.5 sm:p-3 transition-all cursor-pointer min-w-0
                                         ${today ? 'border-ink bg-ink/5' : 'border-line'}
                                         ${hasData ? 'bg-white hover:shadow-md' : 'bg-gray-50'}
                                     `}
-                                    style={{ minHeight: viewMode === 'week' ? '200px' : '120px' }}
+                                    style={{ minHeight: viewMode === 'week' ? undefined : '64px' }}
                                 >
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className={`text-lg font-bold ${today ? 'text-ink' : 'text-ink/70'}`}>
+                                        <span className={`text-base sm:text-lg font-bold ${today ? 'text-ink' : 'text-ink/70'}`}>
+                                            {viewMode === 'week' && <span className="sm:hidden text-xs font-semibold text-ink/50 mr-1">{dayNames[date.getDay()]}</span>}
                                             {date.getDate()}
                                         </span>
                                         {hasData && (
@@ -189,7 +190,7 @@ function GridView({ onOpenDay }) {
                                     </div>
 
                                     {entry && hasData && (
-                                        <div className="space-y-1 text-xs text-ink/70 overflow-hidden">
+                                        <div className={`space-y-1 text-xs text-ink/70 overflow-hidden ${viewMode === 'month' ? 'hidden sm:block' : ''}`}>
                                             {entry.lines
                                                 .filter(line => (line.content || '').trim() !== '')
                                                 .slice(0, viewMode === 'week' ? 4 : 2)
@@ -198,7 +199,7 @@ function GridView({ onOpenDay }) {
                                                         key={line.id}
                                                         className="truncate flex items-start gap-1"
                                                     >
-                                                        {line.type === 'checkbox' && <span>☐</span>}
+                                                        {(line.type === 'checkbox' || line.type === 'checkbox-time') && <span>{line.checked ? '☑' : '☐'}</span>}
                                                         {line.type === 'radio' && <span>○</span>}
                                                         <span className="flex-1 truncate">{line.content}</span>
                                                     </div>

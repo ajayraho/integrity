@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { loadHabits, addHabit, updateHabit, deleteHabit } from '../utils/storage'
+import { loadHabits, addHabit, updateHabit, deleteHabit, getMateriaStats } from '../utils/storage'
+import MateriaOrb from './MateriaOrb'
 import { useStoreVersion } from '../hooks/useStore'
 import ConfirmDialog from './ConfirmDialog'
 
 function HabitManagement({ onClose }) {
     useStoreVersion()
     const habits = loadHabits()
+    const materiaList = getMateriaStats()
     const [showAddForm, setShowAddForm] = useState(false)
     const [editingHabit, setEditingHabit] = useState(null)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
@@ -42,7 +44,8 @@ function HabitManagement({ onClose }) {
             icon: habit.icon,
             color: habit.color || '#2C3E50',
             goal: habit.goal || 1,
-            xp: habit.xp || 10
+            xp: habit.xp || 10,
+            materiaId: habit.materiaId || null,
         })
         setShowAddForm(true)
     }
@@ -68,7 +71,7 @@ function HabitManagement({ onClose }) {
     const iconOptions = [
         '✓', '💪', '📚', '🏃', '🧘', '💧', '🍎', '😴', '📝', '🎯', '⭐', '🔥',
         '💼', '🎨', '🎵', '🎮', '💻', '📱', '☕', '🍕', '🏋️', '🚴', '🏊', '⚽',
-        '🏀', '🎾', '🏐', '🎳', '🎯', '🎪', '🎭', '🎬', '📷', '📖', '✏️', '📊',
+        '🏀', '🎾', '🏐', '🎳', '🧠', '🎪', '🎭', '🎬', '📷', '📖', '✏️', '📊',
         '💡', '🌟', '🌈', '🌸', '🌺', '🌻', '🌹', '🍀', '🌿', '🌱', '🌾', '🍃',
         '❤️', '💚', '💙', '💜', '🧡', '💛', '🤍', '🖤', '💖', '💗', '💓', '💝'
     ]
@@ -184,6 +187,21 @@ function HabitManagement({ onClose }) {
                                     </p>
                                 </div>
 
+                                <div>
+                                    <label className="block text-sm font-medium text-ink mb-1">Materia</label>
+                                    <select
+                                        value={newHabit.materiaId || ''}
+                                        onChange={(e) => setNewHabit({ ...newHabit, materiaId: e.target.value || null })}
+                                        className="w-full px-3 py-2 border border-line rounded-lg outline-none focus:border-ink"
+                                    >
+                                        <option value="">None</option>
+                                        {materiaList.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}{m.category ? ` · ${m.category}` : ''} (×{m.multiplier})</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">Habit XP is boosted by the materia, and the materia gains AP.</p>
+                                </div>
+
                                 <div className="flex gap-2">
                                     <button
                                         onClick={handleAddHabit}
@@ -210,17 +228,23 @@ function HabitManagement({ onClose }) {
                             habits.map(habit => (
                                 <div
                                     key={habit.id}
-                                    className="flex items-center gap-4 p-4 border-2 border-line rounded-lg bg-white hover:bg-line/10 transition-colors"
+                                    className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-2 p-4 border-2 border-line rounded-lg bg-white hover:bg-line/10 transition-colors"
                                 >
                                     <span className="text-3xl">{habit.icon}</span>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <div className="font-semibold text-ink">{habit.name}</div>
                                         <div className="text-sm text-gray-600">
                                             Type: {typeOptions.find(t => t.value === habit.type)?.label}
                                             {habit.type === 'number' && habit.goal && ` • Goal: ${habit.goal}`}
                                             {habit.xp > 0 && ` • XP: ${habit.xp}`}
+                                            {materiaList.find(m => m.id === habit.materiaId) && (
+                                                <span className="inline-flex items-center gap-1 ml-1">
+                                                    • <MateriaOrb materia={materiaList.find(m => m.id === habit.materiaId)} size={9} /> {materiaList.find(m => m.id === habit.materiaId).name}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
+                                    <div className="flex gap-1 w-full sm:w-auto justify-end">
                                     <button
                                         onClick={() => handleEditHabit(habit)}
                                         className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium"
@@ -233,6 +257,7 @@ function HabitManagement({ onClose }) {
                                     >
                                         Delete
                                     </button>
+                                    </div>
                                 </div>
                             ))
                         )}

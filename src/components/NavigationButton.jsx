@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import ConfirmDialog from './ConfirmDialog'
+import { useStoreVersion } from '../hooks/useStore'
+import { getPlayer } from '../utils/storage'
 
 function NavigationButton({ currentView, onViewChange, onManageHabits, onBackup, onLogout, userEmail }) {
+    useStoreVersion()
+    const player = getPlayer()
     const [showMenu, setShowMenu] = useState(false)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
 
     const views = [
-        { id: 'continuous', label: 'Continuous Scroll', icon: '📜' },
-        { id: 'xp-stats', label: 'XP Statistics', icon: '🏆' },
+        { id: 'continuous', label: 'Journal', icon: '📜' },
+        { id: 'xp-stats', label: 'XP & Statistics', icon: '🏆' },
         { id: 'habit-tracker', label: 'Habit Tracker', icon: '📊' },
         { id: 'calendar', label: 'Calendar View', icon: '📅' },
         { id: 'timeline', label: 'Timeline View', icon: '⏱️' },
@@ -20,7 +24,16 @@ function NavigationButton({ currentView, onViewChange, onManageHabits, onBackup,
                 <>
                 <div className="fixed inset-0" onClick={() => setShowMenu(false)} />
                 <div className="absolute bottom-16 right-0 bg-white border-2 border-line shadow-lg rounded-lg py-2 mb-2 min-w-[220px] max-h-[75vh] overflow-y-auto">
-                    {userEmail && <div className="px-4 pb-2 mb-1 text-xs text-ink/50 border-b border-line truncate">{userEmail}</div>}
+                    {userEmail && (
+                        <div className="px-4 pb-2 mb-1 border-b border-line">
+                            {player && (
+                                <div className="text-sm font-semibold text-ink">
+                                    Lv {player.level}
+                                </div>
+                            )}
+                            <div className="text-xs text-ink/50 truncate">{userEmail}</div>
+                        </div>
+                    )}
                     {views.map(view => (
                         <button
                             key={view.id}

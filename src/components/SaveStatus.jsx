@@ -15,7 +15,7 @@ function SaveStatus() {
     const label = LABELS[status]
     if (!label) return null
     return (
-        <div className={`fixed bottom-24 right-6 z-30 text-xs px-3 py-1 rounded-full border shadow-sm ${label.cls}`} role="status">
+        <div className={`fixed bottom-9 right-24 z-30 text-xs px-3 py-1 rounded-full border shadow-sm ${label.cls}`} role="status">
             {label.text}
         </div>
     )

@@ -25,17 +25,17 @@ function MedalUnlockNotification({ medal, monthName, onClose }) {
     const getGradientColors = () => {
         switch (medal.tier) {
             case 'BRONZE':
-                return 'from-orange-600 via-orange-400 to-yellow-600'
+                return 'from-stone-700 via-stone-500 to-stone-800'
             case 'SILVER':
-                return 'from-gray-400 via-gray-200 to-gray-500'
+                return 'from-slate-500 via-slate-300 to-slate-600'
             case 'GOLD':
-                return 'from-yellow-500 via-yellow-300 to-yellow-600'
+                return 'from-orange-600 via-amber-400 to-rose-600'
             case 'PLATINUM':
-                return 'from-slate-300 via-white to-slate-400'
+                return 'from-amber-500 via-yellow-300 to-orange-500'
             case 'DIAMOND':
-                return 'from-cyan-400 via-blue-200 to-cyan-500'
+                return 'from-fuchsia-700 via-purple-500 to-indigo-700'
             case 'LEGEND':
-                return 'from-purple-600 via-pink-500 to-purple-700'
+                return 'from-indigo-950 via-purple-800 to-slate-900'
             default:
                 return 'from-gray-400 to-gray-600'
         }

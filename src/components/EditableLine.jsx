@@ -1,8 +1,12 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useLayoutEffect, useState } from 'react'
 import LineTypeMenu from './LineTypeMenu'
 import ReminderModal from './ReminderModal'
+import QuestModal from './QuestModal'
+import MateriaOrb from './MateriaOrb'
+import { getMateriaStat, getDayLedger } from '../utils/storage'
+import { questXP } from '../game/engine.js'
 
-import { focusLine } from '../utils/focus'
+import { focusLine, consumePendingFocus } from '../utils/focus'
 
 const LINE_STYLE = {
     minHeight: '32px',
@@ -47,23 +51,29 @@ function moveToSibling(current, direction) {
  *   onToggleCheck(bool) checkbox clicked (parent handles XP prompt)
  *   onSelectRadio()     radio clicked
  *   onTypeChange(type)
+ *   onQuestChange(patch) set quest XP / materia
  *   reminders           reminders for this line (omit to disable reminders, e.g. templates)
  *   dayId
  *   mode                'journal' | 'template'
  */
 function EditableLine({
-    line, onChange, onEnter, onDelete, onToggleCheck, onSelectRadio, onTypeChange,
+    line, onChange, onEnter, onDelete, onToggleCheck, onSelectRadio, onTypeChange, onQuestChange,
     reminders, dayId, autoFocus, mode = 'journal',
 }) {
     const contentRef = useRef(null)
     const [showTypeMenu, setShowTypeMenu] = useState(false)
     const [showReminderModal, setShowReminderModal] = useState(false)
+    const [showQuestModal, setShowQuestModal] = useState(false)
     const isTemplate = mode === 'template'
     const hasReminder = !isTemplate && (reminders || []).some(r => r.enabled !== false)
 
     useEffect(() => {
         if (autoFocus && contentRef.current) contentRef.current.focus()
     }, [autoFocus])
+
+    useLayoutEffect(() => {
+        consumePendingFocus(line.id, contentRef.current)
+    }, [line.id, line.type])
 
     // Keep the DOM text in sync with data (remote edits, template apply, type change).
     // While typing, data already equals the DOM text, so the caret isn't disturbed.
@@ -119,8 +129,25 @@ function EditableLine({
     )
 
     const checked = Boolean(line.checked)
-    const xpBadge = !isTemplate && checked && Number(line.xp) > 0 && (
-        <span className="mt-1.5 text-sm text-green-600 font-semibold flex-shrink-0">+{line.xp} XP</span>
+    const materia = getMateriaStat(line.materiaId)
+    const baseXP = questXP(line)
+    const earned = !isTemplate && checked
+        ? getDayLedger(dayId)?.items.find(i => i.kind === 'quest' && i.id === line.id)?.earned ?? baseXP
+        : null
+    // Quest chip: catalyser materia + XP. Tap to edit.
+    const xpBadge = (
+        <button
+            type="button"
+            onClick={() => setShowQuestModal(true)}
+            className={`mt-1 flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold transition-colors ${checked && !isTemplate
+                ? 'border-green-300 bg-green-50 text-green-700'
+                : 'border-line bg-white/70 text-ink/70 hover:border-ink/40'}`}
+            title={materia ? `${materia.name} ×${materia.multiplier}` : 'Set quest XP and materia'}
+        >
+            {materia && <MateriaOrb materia={materia} size={10} />}
+            {materia && <span className="font-normal">{materia.name}</span>}
+            {earned !== null ? `+${earned} XP` : `${baseXP} XP`}
+        </button>
     )
 
     const renderLineContent = () => {
@@ -141,32 +168,38 @@ function EditableLine({
                 )
 
             case 'checkbox-time':
+                // Text + chip on the first ruled line, the time range on the second
                 return (
-                    <div className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
-                        <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={isTemplate}
-                            className="mt-2 w-4 h-4 cursor-pointer flex-shrink-0"
-                            onChange={(e) => onToggleCheck?.(e.target.checked)}
-                        />
-                        <input
-                            type="time"
-                            value={line.timeStart || ''}
-                            onChange={(e) => onChange({ timeStart: e.target.value })}
-                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-24 sm:w-auto"
-                            aria-label="Start time"
-                        />
-                        <span className="mt-1.5 flex-shrink-0">-</span>
-                        <input
-                            type="time"
-                            value={line.timeEnd || ''}
-                            onChange={(e) => onChange({ timeEnd: e.target.value })}
-                            className="mt-0.5 px-1 sm:px-2 py-0.5 border border-line rounded text-sm bg-transparent w-24 sm:w-auto"
-                            aria-label="End time"
-                        />
-                        {editable('Task...', checked ? 'line-through text-ink/50' : '')}
-                        {xpBadge}
+                    <div>
+                        <div className="flex items-start gap-2">
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={isTemplate}
+                                className="mt-2 w-4 h-4 cursor-pointer flex-shrink-0"
+                                onChange={(e) => onToggleCheck?.(e.target.checked)}
+                            />
+                            {editable('Task...', checked ? 'line-through text-ink/50' : '')}
+                            {xpBadge}
+                        </div>
+                        <div className="flex items-center gap-1.5 pl-6 text-ink/70" style={{ height: 32 }}>
+                            <span className="text-xs">⏰</span>
+                            <input
+                                type="time"
+                                value={line.timeStart || ''}
+                                onChange={(e) => onChange({ timeStart: e.target.value })}
+                                className="px-1 py-0 border border-line rounded text-xs bg-transparent"
+                                aria-label="Start time"
+                            />
+                            <span className="text-xs">–</span>
+                            <input
+                                type="time"
+                                value={line.timeEnd || ''}
+                                onChange={(e) => onChange({ timeEnd: e.target.value })}
+                                className="px-1 py-0 border border-line rounded text-xs bg-transparent"
+                                aria-label="End time"
+                            />
+                        </div>
                     </div>
                 )
 
@@ -236,6 +269,15 @@ function EditableLine({
                         setShowTypeMenu(false)
                     }}
                     onClose={() => setShowTypeMenu(false)}
+                />
+            )}
+
+            {showQuestModal && (
+                <QuestModal
+                    line={line}
+                    isTemplate={isTemplate}
+                    onSave={(patch) => onQuestChange ? onQuestChange(patch) : onChange(patch)}
+                    onClose={() => setShowQuestModal(false)}
                 />
             )}
 

@@ -7,6 +7,8 @@
 //   users/{uid}/badges/{id}         { type, name, icon, xpBoost, description, date }
 //   users/{uid}/medals/{id}         { tier, name, icon, threshold, description, year, month, revoked? }
 //   users/{uid}/reminders/{id}      { lineId, dayId, lineContent, datetime, recurring, customRecurring, enabled }
+//   users/{uid}/materia/{id}        { type, customName, category, createdAt }
+//   users/{uid}/meta/game           { startedAt: YYYY-MM-DD }  (penalties/decay only count from here)
 //
 // Components read synchronously from an in-memory cache that is kept live with
 // onSnapshot listeners (so other devices' edits show up). Local edits update the
@@ -20,9 +22,11 @@ import {
     collection, doc, onSnapshot, writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import { toDateId, fromDateId, uid as makeId } from './date'
+import { toDateId, todayId, uid as makeId } from './date'
+import { computeLedger, isQuest, questXP, computeStreak, streakRank } from '../game/engine.js'
+import { templateLine } from './lineOps'
 
-const COLLECTIONS = ['days', 'habits', 'templates', 'badges', 'medals', 'reminders']
+const COLLECTIONS = ['days', 'habits', 'templates', 'badges', 'medals', 'reminders', 'materia', 'meta']
 const FLUSH_DELAY = 1500 // ms of quiet before writing
 const FLUSH_MAX_WAIT = 10000 // never hold edits longer than this
 const BATCH_LIMIT = 500 // Firestore max operations per batch
@@ -116,6 +120,7 @@ export function initStore(uid) {
                         remaining--
                         if (remaining === 0 && !settled) {
                             settled = true
+                            ensureGameMeta()
                             if (pending.size) scheduleFlush()
                             resolve({ success: true })
                         }
@@ -253,11 +258,7 @@ const ephemeralDays = new Map()
 
 function linesFromTemplate(template, dayId) {
     if (template?.lines?.length) {
-        return template.lines.map(l => ({
-            id: makeId(),
-            type: l.type || 'text',
-            content: l.content || '',
-        }))
+        return template.lines.map(l => templateLine(l, makeId()))
     }
     return [{ id: `${dayId}-1`, type: 'text', content: '' }]
 }
@@ -303,7 +304,7 @@ export function isDayEmpty(day) {
     if (!day) return true
     const hasLines = (day.lines || []).some(l => (l.content || '').trim() !== '' || l.checked || l.type !== 'text')
     const hasHabits = Object.values(day.habits || {}).some(v => v !== '' && v !== false && v != null)
-    return !hasLines && !hasHabits
+    return !hasLines && !hasHabits && !day.streak && !day.streakReset
 }
 
 export function dayHasContent(day) {
@@ -321,7 +322,7 @@ export function loadTemplates() {
 export function saveTemplate(template) {
     const id = makeId()
     if (template.isDefault) clearDefaultTemplate()
-    const lines = (template.lines || []).map(l => ({ id: l.id || makeId(), type: l.type || 'text', content: l.content || '' }))
+    const lines = (template.lines || []).map(l => templateLine(l, l.id || makeId()))
     writeDoc('templates', id, { ...template, lines, id, createdAt: new Date().toISOString() })
     return id
 }
@@ -419,47 +420,173 @@ export function resetHabits(dayId) {
     return -removed
 }
 
-// ============= XP (derived) =============
+// ============= GAME: XP, materia, levels (derived) =============
 
+function ensureGameMeta() {
+    if (!state.meta.get('game')) writeDoc('meta', 'game', { startedAt: todayId() })
+}
+
+export function getGameStart() {
+    return state.meta.get('game')?.startedAt || todayId()
+}
+
+let ledgerCache = { version: -1, today: null, ledger: null }
+
+/** Full derived game state (cached per store version + date). */
+export function getLedger() {
+    const today = todayId()
+    if (ledgerCache.version !== version || ledgerCache.today !== today) {
+        ledgerCache = {
+            version,
+            today,
+            ledger: computeLedger({
+                days: [...state.days.values()],
+                habits: [...state.habits.values()],
+                badges: [...state.badges.values()],
+                materia: loadMateria(),
+                gameStart: getGameStart(),
+                today,
+            }),
+        }
+    }
+    return ledgerCache.ledger
+}
+
+/** Base XP of a completed quest line (before materia boost). */
 export function lineXP(line) {
-    return (line.type === 'checkbox' || line.type === 'checkbox-time') && line.checked ? (Number(line.xp) || 0) : 0
+    return isQuest(line) && line.checked ? questXP(line) : 0
 }
 
-function dayWorkXP(day) {
-    if (!day) return 0
-    const tasks = (day.lines || []).reduce((s, l) => s + lineXP(l), 0)
-    const habits = Object.values(day.habitXP || {}).reduce((s, x) => s + (Number(x) || 0), 0)
-    return tasks + habits
-}
-
-function badgeXPForDate(date) {
-    return getBadgesForDate(date).reduce((s, b) => s + (Number(b.xpBoost) || 0), 0)
+export function getDayLedger(date) {
+    return getLedger().days.get(date) || null
 }
 
 export function getXPForDate(date) {
-    return dayWorkXP(state.days.get(date)) + badgeXPForDate(date)
+    return getDayLedger(date)?.net || 0
 }
 
 export function getTotalXP() {
-    let total = 0
-    state.days.forEach(d => { total += dayWorkXP(d) })
-    state.badges.forEach(b => { total += Number(b.xpBoost) || 0 })
-    return total
+    return getLedger().totalXP
+}
+
+export function getPlayer() {
+    return getLedger().player
 }
 
 /** @param month 1-based */
 export function getXPForMonth(year, month) {
     const prefix = `${year}-${String(month).padStart(2, '0')}`
-    const totals = {}
-    state.days.forEach((d, id) => {
-        if (id.startsWith(prefix)) totals[id] = (totals[id] || 0) + dayWorkXP(d)
+    const out = []
+    getLedger().days.forEach((rec, date) => {
+        if (date.startsWith(prefix)) out.push({ date, total: rec.net })
     })
-    state.badges.forEach(b => {
-        if (b.date?.startsWith(prefix)) totals[b.date] = (totals[b.date] || 0) + (Number(b.xpBoost) || 0)
+    return out.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+// ---- materia ----
+
+export function loadMateria() {
+    return [...state.materia.values()].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+}
+
+/** Materia with live level/AP/multiplier. */
+export function getMateriaStats() {
+    const stats = getLedger().materia
+    return loadMateria().map(m => stats.get(m.id) || m)
+}
+
+export function getMateriaStat(materiaId) {
+    return materiaId ? getLedger().materia.get(materiaId) || null : null
+}
+
+export function addMateria({ type, category = '' }) {
+    if (loadMateria().length >= getPlayer().materiaSlots) {
+        return { success: false, error: 'No free materia slots. Level up to unlock more.' }
+    }
+    const id = makeId()
+    const m = { id, type, category: category.trim(), createdAt: new Date().toISOString() }
+    writeDoc('materia', id, m)
+    return { success: true, materia: m }
+}
+
+export function updateMateria(materiaId, updates) {
+    const m = state.materia.get(materiaId)
+    if (!m) return false
+    writeDoc('materia', materiaId, { ...m, ...updates })
+    return true
+}
+
+/** Remove a materia. Quests/habits that used it simply become untagged. */
+export function deleteMateria(materiaId) {
+    if (!state.materia.has(materiaId)) return false
+    writeDoc('materia', materiaId, null)
+    state.habits.forEach(h => {
+        if (h.materiaId === materiaId) writeDoc('habits', h.id, { ...h, materiaId: null })
     })
-    return Object.entries(totals)
-        .map(([date, total]) => ({ date, total }))
-        .sort((a, b) => a.date.localeCompare(b.date))
+    return true
+}
+
+/** Small snapshot used to detect level-ups after an action. */
+export function gameSnapshot() {
+    const L = getLedger()
+    const materia = {}
+    L.materia.forEach((m, id) => { materia[id] = m.level })
+    return {
+        totalXP: L.totalXP,
+        level: L.player.level,
+        slots: L.player.materiaSlots,
+        materia,
+        badgeIds: new Set(L.badges.map(b => b.id)),
+        medalIds: new Set(L.medals.map(m => m.id)),
+    }
+}
+
+// ---- streak (Free Fire style ranks) ----
+
+let streakCache = { version: -1, fn: null }
+
+function streakFn() {
+    if (streakCache.version !== version) {
+        streakCache = { version, fn: computeStreak([...state.days.values()]) }
+    }
+    return streakCache.fn
+}
+
+/** Streak on a day: { count, rank, ticked, reset, carried } */
+export function getStreak(dayId) {
+    const day = state.days.get(dayId)
+    const { before, after } = streakFn()(dayId)
+    return {
+        count: after,
+        carried: before,
+        rank: streakRank(after),
+        ticked: Boolean(day?.streak),
+        reset: Boolean(day?.streakReset),
+    }
+}
+
+/** Tap on the badge: count this day (+1) or undo it (−1). */
+export function toggleStreakDay(dayId) {
+    const day = getDayOrDefault(dayId)
+    saveDay(dayId, { streak: !day.streak })
+}
+
+/** Start over from this day (or undo a reset). */
+export function setStreakReset(dayId, reset) {
+    const day = getDayOrDefault(dayId)
+    // Remember whether the day was counted so "undo reset" can restore it
+    saveDay(dayId, reset
+        ? { streakReset: true, streakWas: Boolean(day.streak), streak: false }
+        : { streakReset: false, streak: Boolean(day.streakWas), streakWas: false })
+}
+
+/** Penalties on finished days after `sinceId` (exclusive) up to yesterday. */
+export function getPenaltiesSince(sinceId) {
+    const out = []
+    getLedger().days.forEach((rec, date) => {
+        if (rec.penalty > 0 && (!sinceId || date > sinceId)) out.push({ date, penalty: rec.penalty, missed: rec.missed })
+    })
+    return out.sort((a, b) => a.date.localeCompare(b.date))
 }
 
 // ============= REMINDERS =============
@@ -516,42 +643,18 @@ export function saveSettings(settings) {
     }
 }
 
-// ============= BADGES =============
+// ============= BADGES & MEDALS =============
+// Regular badges and monthly medals are derived from your data by the game
+// engine (see game/engine.js). Only hand-made "custom" ones are stored.
 
-export const BADGE_TYPES = {
-    DEEP_WORK_2HR: { id: 'deep_work_2hr', name: 'Deep Focus 2H', icon: '🎯', xpBoost: 50, description: 'Complete a 2-hour deep work session' },
-    DEEP_WORK_5HR: { id: 'deep_work_5hr', name: 'Deep Focus 5H', icon: '🔥', xpBoost: 150, description: 'Complete a 5-hour deep work session' },
-    WATER_WARRIOR: { id: 'water_warrior', name: 'Water Warrior', icon: '💧', xpBoost: 30, description: 'Drink 8 glasses of water' },
-    EXERCISE_PRO: { id: 'exercise_pro', name: 'Exercise Pro', icon: '💪', xpBoost: 40, description: 'Complete your exercise routine' },
-    EARLY_BIRD: { id: 'early_bird', name: 'Early Bird', icon: '🌅', xpBoost: 25, description: 'Complete a task before 8 AM' },
-    NIGHT_OWL: { id: 'night_owl', name: 'Night Owl', icon: '🦉', xpBoost: 25, description: 'Complete a task after 10 PM' },
-    TASK_MASTER: { id: 'task_master', name: 'Task Master', icon: '✅', xpBoost: 60, description: 'Complete 10 tasks in a day' },
-    HABIT_STREAK_7: { id: 'habit_streak_7', name: '7-Day Streak', icon: '🔄', xpBoost: 100, description: 'Maintain a habit for 7 days' },
-    PERFECT_DAY: { id: 'perfect_day', name: 'Perfect Day', icon: '⭐', xpBoost: 200, description: 'Complete all habits and 5+ tasks' },
-    READING_BUG: { id: 'reading_bug', name: 'Reading Bug', icon: '📚', xpBoost: 35, description: 'Read for 1 hour' },
-    PRODUCTIVITY_BEAST: { id: 'productivity_beast', name: 'Productivity Beast', icon: '🚀', xpBoost: 150, description: 'Earn 200+ XP in a day' }
+export { BADGE_TYPES, MEDAL_TIERS, MEDAL_ORDER } from '../game/config.js'
+
+export function getBadgesForDate(date) {
+    return getDayLedger(date)?.badges || []
 }
 
-export const MEDAL_TIERS = {
-    BRONZE: { id: 'bronze', name: 'Bronze Medal', icon: '🥉', threshold: 100, color: '#CD7F32', description: 'Earn 100+ XP in a month' },
-    SILVER: { id: 'silver', name: 'Silver Medal', icon: '🥈', threshold: 500, color: '#C0C0C0', description: 'Earn 500+ XP in a month' },
-    GOLD: { id: 'gold', name: 'Gold Medal', icon: '🥇', threshold: 1000, color: '#FFD700', description: 'Earn 1000+ XP in a month' },
-    PLATINUM: { id: 'platinum', name: 'Platinum Medal', icon: '💎', threshold: 2500, color: '#E5E4E2', description: 'Earn 2500+ XP in a month' },
-    DIAMOND: { id: 'diamond', name: 'Diamond Medal', icon: '💠', threshold: 5000, color: '#B9F2FF', description: 'Earn 5000+ XP in a month' },
-    LEGEND: { id: 'legend', name: 'Legend Medal', icon: '👑', threshold: 10000, color: '#9D00FF', description: 'Earn 10000+ XP in a month' }
-}
-
-export function awardBadge(badgeType, date) {
-    const info = BADGE_TYPES[badgeType]
-    if (!info) return null
-    if (getBadgesForDate(date).some(b => b.type === badgeType)) return null
-    const id = makeId()
-    const badge = {
-        id, type: badgeType, name: info.name, icon: info.icon, xpBoost: info.xpBoost,
-        description: info.description || '', date, timestamp: new Date().toISOString(),
-    }
-    writeDoc('badges', id, badge)
-    return badge
+export function getAllBadges() {
+    return getLedger().badges
 }
 
 export function createCustomBadge(badgeData, date) {
@@ -565,23 +668,16 @@ export function createCustomBadge(badgeData, date) {
     return badge
 }
 
-export function getBadgesForDate(date) {
-    return [...state.badges.values()].filter(b => b.date === date)
-}
-
-export function getAllBadges() {
-    return [...state.badges.values()]
-}
-
 export function deleteBadge(badgeId) {
-    if (!state.badges.has(badgeId)) return { success: false, error: 'Badge not found' }
+    const b = state.badges.get(badgeId)
+    if (!b || b.type !== 'CUSTOM') return { success: false, error: 'Only custom badges can be deleted' }
     writeDoc('badges', badgeId, null)
     return { success: true }
 }
 
 export function updateBadge(badgeId, updates) {
     const badge = state.badges.get(badgeId)
-    if (!badge) return { success: false, error: 'Badge not found' }
+    if (!badge || badge.type !== 'CUSTOM') return { success: false, error: 'Only custom badges can be edited' }
     const next = { ...badge }
     if (updates.xpBoost !== undefined) next.xpBoost = Number(updates.xpBoost) || 0
     if (updates.icon !== undefined) next.icon = updates.icon
@@ -592,40 +688,8 @@ export function updateBadge(badgeId, updates) {
     return { success: true, badge: next }
 }
 
-/** Auto-award badges for a day. Returns newly earned badges. */
-export function checkBadgeEligibility(date) {
-    const earned = []
-    const day = state.days.get(date)
-    if (dayWorkXP(day) + badgeXPForDate(date) >= 200) {
-        const b = awardBadge('PRODUCTIVITY_BEAST', date)
-        if (b) earned.push(b)
-    }
-    const completed = (day?.lines || []).filter(l => (l.type === 'checkbox' || l.type === 'checkbox-time') && l.checked).length
-    if (completed >= 10) {
-        const b = awardBadge('TASK_MASTER', date)
-        if (b) earned.push(b)
-    }
-    return earned
-}
-
-// ============= MEDALS =============
-
-function medalsFor(year, month) {
-    return [...state.medals.values()].filter(m => m.year === year && m.month === month)
-}
-
-export function awardMedal(tier, year, month) {
-    const info = MEDAL_TIERS[tier]
-    if (!info) return null
-    const existing = medalsFor(year, month).find(m => m.tier === tier)
-    if (existing && !existing.revoked) return null
-    const id = existing?.id || makeId()
-    const medal = {
-        id, tier, name: info.name, icon: info.icon, threshold: info.threshold,
-        description: info.description || '', year, month, timestamp: new Date().toISOString(),
-    }
-    writeDoc('medals', id, medal)
-    return medal
+function customMedals() {
+    return [...state.medals.values()].filter(m => m.tier === 'CUSTOM' && !m.revoked)
 }
 
 export function createCustomMedal(medalData, year, month) {
@@ -639,32 +703,34 @@ export function createCustomMedal(medalData, year, month) {
     return medal
 }
 
+/** Medals for a month: celestial tiers reached (derived) + custom ones. */
+export function getMedalsForMonth(year, month) {
+    return [
+        ...getLedger().medals.filter(m => m.year === year && m.month === month),
+        ...customMedals().filter(m => m.year === year && m.month === month),
+    ]
+}
+
+/** Highest celestial medal of a month, or null. */
 export function getMedalForMonth(year, month) {
-    const list = medalsFor(year, month).filter(m => !m.revoked)
-    if (!list.length) return null
-    return list.sort((a, b) => b.threshold - a.threshold)[0]
+    const list = getLedger().medals.filter(m => m.year === year && m.month === month)
+    return list.sort((a, b) => b.threshold - a.threshold)[0] || null
 }
 
 export function getAllMedals() {
-    return [...state.medals.values()].filter(m => !m.revoked).sort((a, b) => {
-        if (a.year !== b.year) return b.year - a.year
-        if (a.month !== b.month) return b.month - a.month
-        return b.threshold - a.threshold
-    })
+    return [...getLedger().medals, ...customMedals()]
 }
 
 export function deleteMedal(medalId) {
-    const medal = state.medals.get(medalId)
-    if (!medal) return { success: false, error: 'Medal not found' }
-    if (medal.tier === 'CUSTOM') writeDoc('medals', medalId, null)
-    // Auto medals are kept as "revoked" so they aren't immediately re-awarded
-    else writeDoc('medals', medalId, { ...medal, revoked: true })
+    const m = state.medals.get(medalId)
+    if (!m || m.tier !== 'CUSTOM') return { success: false, error: 'Only custom medals can be deleted' }
+    writeDoc('medals', medalId, null)
     return { success: true }
 }
 
 export function updateMedal(medalId, updates) {
     const medal = state.medals.get(medalId)
-    if (!medal) return { success: false, error: 'Medal not found' }
+    if (!medal || medal.tier !== 'CUSTOM') return { success: false, error: 'Only custom medals can be edited' }
     const next = { ...medal }
     if (updates.icon !== undefined) next.icon = updates.icon
     if (updates.name !== undefined) next.name = updates.name
@@ -673,27 +739,6 @@ export function updateMedal(medalId, updates) {
     next.timestamp = new Date().toISOString()
     writeDoc('medals', medalId, next)
     return { success: true, medal: next }
-}
-
-/** Award the highest tier reached this month (if new). Returns the medal or null. */
-export function checkMonthlyMedals(year, month) {
-    const totalXP = getXPForMonth(year, month).reduce((s, d) => s + d.total, 0)
-    for (const tier of ['LEGEND', 'DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE']) {
-        if (totalXP >= MEDAL_TIERS[tier].threshold) {
-            const existing = medalsFor(year, month).find(m => m.tier === tier)
-            if (existing) return null // already earned (or deliberately revoked)
-            return awardMedal(tier, year, month)
-        }
-    }
-    return null
-}
-
-/** Run after XP is gained on a day: returns { badges, medal } newly earned. */
-export function checkRewards(dateId) {
-    const badges = checkBadgeEligibility(dateId)
-    const d = fromDateId(dateId)
-    const medal = checkMonthlyMedals(d.getFullYear(), d.getMonth() + 1)
-    return { badges, medal }
 }
 
 // ============= BACKUP: EXPORT / IMPORT =============

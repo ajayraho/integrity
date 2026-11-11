@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { loadHabits, saveHabitOrder, getDayOrDefault, setHabitValue, resetHabits } from '../utils/storage'
+import { loadHabits, saveHabitOrder, getDayOrDefault, setHabitValue, resetHabits, getMateriaStat } from '../utils/storage'
+import MateriaOrb from './MateriaOrb'
 import { useFeedback } from '../hooks/useFeedback'
 import ConfirmDialog from './ConfirmDialog'
 import HabitReorderModal from './HabitReorderModal'
@@ -8,7 +9,7 @@ function HabitsSection({ dayId }) {
     // Parent DaySection re-renders on every store change, so these are live
     const allHabits = loadHabits()
     const dayHabits = getDayOrDefault(dayId).habits || {}
-    const { celebrate } = useFeedback()
+    const { act } = useFeedback()
     const [showMenu, setShowMenu] = useState(false)
     const [showReorderModal, setShowReorderModal] = useState(false)
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, action: null, title: '', message: '' })
@@ -28,8 +29,7 @@ function HabitsSection({ dayId }) {
     }, [showMenu])
 
     const handleHabitChange = (habitId, value) => {
-        const delta = setHabitValue(dayId, habitId, value)
-        if (delta) celebrate(delta, dayId)
+        act(dayId, () => setHabitValue(dayId, habitId, value))
     }
 
     const renderHabitInput = (habit) => {
@@ -114,8 +114,7 @@ function HabitsSection({ dayId }) {
                                 setConfirmDialog({
                                     isOpen: true,
                                     action: () => {
-                                        const delta = resetHabits(dayId)
-                                        if (delta) celebrate(delta, dayId)
+                                        act(dayId, () => resetHabits(dayId))
                                         setShowMenu(false)
                                         setConfirmDialog({ isOpen: false, action: null, title: '', message: '' })
                                     },
@@ -142,6 +141,9 @@ function HabitsSection({ dayId }) {
                                     {habit.icon}
                                 </span>
                                 {habit.name}
+                                {getMateriaStat(habit.materiaId) && (
+                                    <MateriaOrb materia={getMateriaStat(habit.materiaId)} size={10} title={`${getMateriaStat(habit.materiaId).name} ×${getMateriaStat(habit.materiaId).multiplier}`} className="ml-1" />
+                                )}
                             </span>
                         </div>
                     ))}

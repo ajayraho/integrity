@@ -18,14 +18,20 @@ function Toast({ message, type = 'success', duration = 3000, onClose }) {
         }
     }, [duration])
 
-    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-    const icon = type === 'success' ? '✨' : type === 'error' ? '❌' : 'ℹ️'
+    const STYLES = {
+        success: { cls: 'bg-green-500', icon: '✨' },
+        error: { cls: 'bg-red-500', icon: '❌' },
+        info: { cls: 'bg-blue-500', icon: 'ℹ️' },
+        level: { cls: 'bg-gradient-to-r from-amber-500 to-yellow-400', icon: '⬆️' },
+        materia: { cls: 'bg-emerald-600', icon: '💠' },
+    }
+    const { cls: bgColor, icon } = STYLES[type] || STYLES.info
 
     return (
-        <div className={`transition-all duration-300 ${isExiting ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}`}>
-            <div className={`${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[200px] max-w-md`}>
-                <span className="text-xl">{icon}</span>
-                <span className="font-semibold text-lg">{message}</span>
+        <div className={`transition-all duration-300 ${isExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
+            <div className={`${bgColor} text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 max-w-[min(28rem,calc(100vw-2rem))]`}>
+                <span className="text-base flex-shrink-0">{icon}</span>
+                <span className="font-semibold text-sm leading-snug">{message}</span>
             </div>
         </div>
     )
@@ -34,7 +40,7 @@ function Toast({ message, type = 'success', duration = 3000, onClose }) {
 /** Stacks toasts vertically at the top of the screen. */
 export function ToastStack({ toasts, removeToast }) {
     return createPortal(
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-3 pointer-events-none px-4">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] flex flex-col-reverse items-center gap-2 pointer-events-none w-full px-4">
             {toasts.map(toast => (
                 <Toast
                     key={toast.id}

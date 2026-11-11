@@ -18,7 +18,9 @@ import { useBadgesAndMedals } from './hooks/useBadgesAndMedals'
 import { FeedbackContext } from './hooks/useFeedback'
 import { startReminderScheduler } from './utils/notifications'
 import { watchAuth, logout } from './utils/auth'
-import { initStore, teardownStore, flush, checkRewards } from './utils/storage'
+import { initStore, teardownStore, flush, gameSnapshot, getMateriaStats, getLedger, getPenaltiesSince } from './utils/storage'
+import { materiaName } from './game/engine.js'
+import { todayId, addDays } from './utils/date'
 import { firebaseConfigured } from './utils/firebase'
 import './App.css'
 
@@ -71,22 +73,58 @@ function App() {
         setCurrentView('continuous')
     }
 
-    const celebrate = useCallback((xpDelta, dateId) => {
-        if (xpDelta > 0) {
-            showXPGain(xpDelta)
-            if (dateId) {
-                const { badges, medal } = checkRewards(dateId)
-                badges.forEach(showBadge)
-                if (medal) showMedal(medal)
+    /**
+     * Run a change and give game feedback: XP gained/lost (including materia
+     * boosts and badges), new badges and medals, level ups and materia level ups.
+     * Everything is derived, so we just compare before and after.
+     */
+    const act = useCallback((dayId, fn) => {
+        const before = gameSnapshot()
+        fn()
+        const after = gameSnapshot()
+        const L = getLedger()
+        const newBadges = L.badges.filter(b => !before.badgeIds.has(b.id))
+        const badgeXP = newBadges.reduce((s, b) => s + (Number(b.xpBoost) || 0), 0)
+        const delta = after.totalXP - before.totalXP - badgeXP
+        if (delta > 0) showXPGain(delta)
+        else if (delta < 0) showXPLoss(delta)
+        newBadges.forEach(showBadge)
+        L.medals.filter(m => !before.medalIds.has(m.id)).forEach(showMedal)
+        if (after.level > before.level) showToast(`LEVEL UP! You reached Lv ${after.level}`, 'level', 4000)
+        if (after.slots > before.slots) showToast('New materia slot unlocked!', 'materia', 4000)
+        getMateriaStats().forEach(m => {
+            const was = before.materia[m.id]
+            if (was && after.materia[m.id] > was) {
+                const head = m.name !== materiaName(m, was) ? `${m.name} learned!` : `${m.name} reached Lv ${m.level}!`
+                showToast(`${head} ${m.category || 'Its'} quests ×${m.multiplier} from tomorrow`, 'materia', 5000)
             }
-        } else if (xpDelta < 0) {
-            showXPLoss(xpDelta)
+        })
+    }, [showXPGain, showXPLoss, showBadge, showMedal, showToast])
+
+    // Once per day on open: report missed quests and decaying materia
+    useEffect(() => {
+        if (!ready || !user) return
+        const key = `integrity_last_seen_${user.uid}`
+        let lastSeen = null
+        try { lastSeen = localStorage.getItem(key) } catch { /* ignore */ }
+        const today = todayId()
+        if (lastSeen === today) return
+        const yesterday = addDays(today, -1)
+        const penalties = getPenaltiesSince(lastSeen).filter(p => p.date <= yesterday)
+        if (penalties.length) {
+            const xp = penalties.reduce((s, p) => s + p.penalty, 0)
+            const missed = penalties.reduce((s, p) => s + p.missed, 0)
+            showToast(`${missed} unfinished quest${missed === 1 ? '' : 's'}: −${xp} XP`, 'error', 6000)
         }
-    }, [showXPGain, showXPLoss, showBadge, showMedal])
+        getMateriaStats().filter(m => m.decaying).forEach(m => {
+            showToast(`${m.name}${m.category ? ` (${m.category})` : ''} is losing AP: unused for ${m.idleDays} days`, 'materia', 6000)
+        })
+        try { localStorage.setItem(key, today) } catch { /* ignore */ }
+    }, [ready, user, showToast])
 
     const feedback = useMemo(() => ({
-        showToast, showXPGain, showXPLoss, showBadge, showMedal, celebrate,
-    }), [showToast, showXPGain, showXPLoss, showBadge, showMedal, celebrate])
+        showToast, showXPGain, showXPLoss, showBadge, showMedal, act,
+    }), [showToast, showXPGain, showXPLoss, showBadge, showMedal, act])
 
     const openDay = useCallback((dayId) => {
         setFocusDayId(dayId)

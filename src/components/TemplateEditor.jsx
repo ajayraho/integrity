@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import EditableLine from './EditableLine'
 import { focusLine } from '../utils/focus'
 import { updateTemplate } from '../utils/storage'
-import { insertAfter, patchLine, removeLine, newLine } from '../utils/lineOps'
+import { insertAfter, patchLine, removeLine, newLine, templateLine } from '../utils/lineOps'
 import { uid } from '../utils/date'
 
 function TemplateEditor({ template, onClose, onSave }) {
@@ -11,7 +11,7 @@ function TemplateEditor({ template, onClose, onSave }) {
     // only touch the line being edited.
     const [lines, setLines] = useState(() => {
         const src = template?.lines?.length ? template.lines : [{ type: 'text', content: '' }]
-        return src.map(l => ({ id: l.id || uid(), type: l.type || 'text', content: l.content || '' }))
+        return src.map(l => templateLine(l, l.id || uid()))
     })
     const [templateName, setTemplateName] = useState(template?.name || 'Untitled Template')
     const [isDefault, setIsDefault] = useState(Boolean(template?.isDefault))
@@ -49,7 +49,7 @@ function TemplateEditor({ template, onClose, onSave }) {
             ...template,
             name: templateName.trim(),
             isDefault,
-            lines: lines.map(line => ({ id: line.id, type: line.type, content: line.content || '' })),
+            lines: lines.map(line => templateLine(line, line.id)),
         }
         updateTemplate(template.id, updatedTemplate)
         onSave?.(updatedTemplate)
