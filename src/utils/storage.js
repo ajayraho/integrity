@@ -309,7 +309,7 @@ export function isDayEmpty(day) {
 
 export function dayHasContent(day) {
     if (!day) return false
-    return (day.lines || []).some(l => (l.content || '').trim() !== '') ||
+    return (day.lines || []).some(l => (l.content || '').trim() !== '' || (l.answer || '').trim() !== '') ||
         Object.values(day.habits || {}).some(v => v !== '' && v !== false && v != null)
 }
 

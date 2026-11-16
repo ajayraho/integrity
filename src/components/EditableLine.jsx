@@ -6,7 +6,7 @@ import MateriaOrb from './MateriaOrb'
 import { getMateriaStat, getDayLedger } from '../utils/storage'
 import { questXP } from '../game/engine.js'
 
-import { focusLine, consumePendingFocus } from '../utils/focus'
+import { focusLine, consumePendingFocus, placeCaret } from '../utils/focus'
 
 const LINE_STYLE = {
     minHeight: '32px',
@@ -61,6 +61,8 @@ function EditableLine({
     reminders, dayId, autoFocus, mode = 'journal',
 }) {
     const contentRef = useRef(null)
+    const answerRef = useRef(null) // only for Question & Answer lines
+    const isQA = line.type === 'qa'
     const [showTypeMenu, setShowTypeMenu] = useState(false)
     const [showReminderModal, setShowReminderModal] = useState(false)
     const [showQuestModal, setShowQuestModal] = useState(false)
@@ -84,9 +86,25 @@ function EditableLine({
         if (el.innerText.replace(/\n$/, '') !== content) el.innerText = content
     }, [line.content, line.type])
 
+    useEffect(() => {
+        const el = answerRef.current
+        if (!el) return
+        const answer = line.answer || ''
+        if (el.innerText.replace(/\n$/, '') !== answer) el.innerText = answer
+    }, [line.answer, line.type])
+
     const handleKeyDown = (e) => {
         const el = contentRef.current
         if (!el) return
+        // Question & Answer: Enter / ↓ from the question goes into the answer box
+        if (isQA && answerRef.current && (
+            (e.key === 'Enter' && !e.shiftKey) ||
+            (e.key === 'ArrowDown' && caretOffset(el) === (el.innerText || '').replace(/\n$/, '').length)
+        )) {
+            e.preventDefault()
+            placeCaret(answerRef.current, e.key === 'Enter')
+            return
+        }
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             onEnter?.()
@@ -104,6 +122,37 @@ function EditableLine({
 
     const handleInput = (e) => {
         onChange({ content: e.currentTarget.innerText.replace(/\n$/, '') })
+    }
+
+    // Answer box: Enter = new line inside the answer; Ctrl/⌘+Enter = new journal line below
+    const handleAnswerKeyDown = (e) => {
+        const el = answerRef.current
+        if (!el) return
+        const text = (el.innerText || '').replace(/\n$/, '')
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault()
+            onEnter?.()
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            document.execCommand('insertLineBreak')
+        } else if (e.key === 'Backspace' && text === '' ) {
+            e.preventDefault()
+            placeCaret(contentRef.current, true)
+        } else if (e.key === 'ArrowUp' && caretOffset(el) === 0) {
+            e.preventDefault()
+            placeCaret(contentRef.current, true)
+        } else if (e.key === 'ArrowDown' && caretOffset(el) === text.length) {
+            if (moveToSibling(contentRef.current, 1)) e.preventDefault()
+        }
+    }
+
+    const handleAnswerInput = (e) => {
+        onChange({ answer: e.currentTarget.innerText.replace(/\n$/, '') })
+    }
+
+    const handleAnswerPaste = (e) => {
+        e.preventDefault()
+        document.execCommand('insertText', false, (e.clipboardData?.getData('text/plain') || '').replace(/\r\n/g, '\n'))
     }
 
     // Paste as plain text (no fonts/colours from other apps)
@@ -203,6 +252,41 @@ function EditableLine({
                     </div>
                 )
 
+            case 'qa':
+                // Small question sitting on the ruled line, answer below spanning as many lines as needed
+                return (
+                    <div>
+                        <div className="flex items-end" style={{ height: 32 }}>
+                            <div
+                                ref={contentRef}
+                                contentEditable
+                                suppressContentEditableWarning
+                                onKeyDown={handleKeyDown}
+                                onInput={handleInput}
+                                onPaste={handlePaste}
+                                data-line-id={line.id}
+                                data-placeholder="Question..."
+                                className="journal-line qa-question flex-1 outline-none bg-transparent min-w-0 break-words text-ink/60 font-semibold"
+                                style={{ fontSize: '12px', lineHeight: '16px', minHeight: 16, paddingBottom: 3 }}
+                            />
+                        </div>
+                        {!isTemplate && (
+                            <div
+                                ref={answerRef}
+                                contentEditable
+                                suppressContentEditableWarning
+                                onKeyDown={handleAnswerKeyDown}
+                                onInput={handleAnswerInput}
+                                onPaste={handleAnswerPaste}
+                                data-answer-of={line.id}
+                                data-placeholder="Your answer..."
+                                className="journal-line outline-none text-ink bg-transparent min-w-0 break-words pl-3 border-l-2 border-line/80"
+                                style={{ ...LINE_STYLE, whiteSpace: 'pre-wrap' }}
+                            />
+                        )}
+                    </div>
+                )
+
             case 'radio':
                 return (
                     <div className="flex items-start gap-2">
@@ -237,7 +321,9 @@ function EditableLine({
             </button>
 
             <div className="flex-1 flex items-start gap-2 min-w-0">
-                <div className="flex-1 min-w-0">
+                {/* keyed by type: browser-typed text lives outside React's control, so a
+                    different layout must get fresh DOM nodes (else old text can linger) */}
+                <div className="flex-1 min-w-0" key={line.type}>
                     {renderLineContent()}
                 </div>
 

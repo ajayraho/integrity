@@ -95,6 +95,7 @@ function TemplateBrowser({ onClose, onApply }) {
             case 'checkbox': return '☐'
             case 'radio': return '◯'
             case 'checkbox-time': return '☐🕐'
+            case 'qa': return '💬'
             default: return '—'
         }
     }
@@ -206,7 +207,7 @@ function TemplateBrowser({ onClose, onApply }) {
                                             >
                                                 <span className="text-lg">{getLineTypeIcon(line.type)}</span>
                                                 <div className="flex-1">
-                                                    <div className="text-xs text-ink/60 mb-1 uppercase">{{ text: 'Text', checkbox: 'Quest', 'checkbox-time': 'Timed quest', radio: 'Option' }[line.type] || line.type}</div>
+                                                    <div className="text-xs text-ink/60 mb-1 uppercase">{{ text: 'Text', checkbox: 'Quest', 'checkbox-time': 'Timed quest', radio: 'Option', qa: 'Question' }[line.type] || line.type}</div>
                                                     {line.content && (
                                                         <div className="text-sm text-ink">{line.content}</div>
                                                     )}

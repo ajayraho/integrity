@@ -136,7 +136,14 @@ function TimelineView({ onOpenDay }) {
                                                                 {line.type === 'radio' && (
                                                                     <span className="text-lg">○</span>
                                                                 )}
-                                                                <span className="flex-1">{line.content}</span>
+                                                                {line.type === 'qa' ? (
+                                                                    <span className="flex-1">
+                                                                        <span className="block text-xs font-semibold text-ink/50">{line.content}</span>
+                                                                        <span className="whitespace-pre-wrap">{line.answer || '—'}</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="flex-1">{line.content}</span>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     {entry.lines.filter(line => (line.content || '').trim() !== '').length > 3 && (

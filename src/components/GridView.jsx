@@ -201,7 +201,7 @@ function GridView({ onOpenDay }) {
                                                     >
                                                         {(line.type === 'checkbox' || line.type === 'checkbox-time') && <span>{line.checked ? '☑' : '☐'}</span>}
                                                         {line.type === 'radio' && <span>○</span>}
-                                                        <span className="flex-1 truncate">{line.content}</span>
+                                                        <span className="flex-1 truncate">{line.type === 'qa' ? `${line.content}: ${line.answer || '—'}` : line.content}</span>
                                                     </div>
                                                 ))}
                                             {entry.lines.filter(line => (line.content || '').trim() !== '').length > (viewMode === 'week' ? 4 : 2) && (

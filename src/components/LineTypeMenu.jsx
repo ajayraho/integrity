@@ -19,6 +19,7 @@ function LineTypeMenu({ currentType, hasContent, allowReminder = true, onSelect,
         { type: 'checkbox', label: 'Quest', icon: '☐' },
         { type: 'checkbox-time', label: 'Timed Quest', icon: '⏰' },
         { type: 'radio', label: 'Option (pick one)', icon: '◯' },
+        { type: 'qa', label: 'Question & Answer', icon: '💬' },
     ]
 
     return (

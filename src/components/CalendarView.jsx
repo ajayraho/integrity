@@ -154,7 +154,12 @@ function CalendarView({ onOpenDay }) {
                                                             .filter(line => (line.content || '').trim() !== '')
                                                             .map(line => (
                                                                 <div key={line.id} className="text-ink text-sm pl-3 border-l-2 border-line">
-                                                                    {line.content}
+                                                                    {line.type === 'qa' ? (
+                                                                        <>
+                                                                            <div className="text-xs font-semibold text-ink/50">{line.content}</div>
+                                                                            <div className="whitespace-pre-wrap">{line.answer || '—'}</div>
+                                                                        </>
+                                                                    ) : line.content}
                                                                 </div>
                                                             ))}
                                                     </div>
